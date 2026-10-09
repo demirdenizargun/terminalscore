@@ -1,11 +1,10 @@
-// terminalscore: terminalde canlı futbol takibi.
 package main
 
 import (
 	"fmt"
 	"os"
 	"time"
-	_ "time/tzdata" // saat dilimi verisini binary'nin içine gömer
+	_ "time/tzdata" // Windows'ta zoneinfo yok
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -14,9 +13,7 @@ import (
 	"github.com/demirdenizargun/terminalscore/internal/ui"
 )
 
-// version, sürüm yayınlanırken derleme komutuyla doldurulur
-// (-ldflags "-X main.version=0.1.0"); elle derlenen sürümde "dev" kalır.
-var version = "dev"
+var version = "dev" // goreleaser -X main.version ile set ediyor
 
 func main() {
 	if len(os.Args) > 1 {
@@ -25,10 +22,9 @@ func main() {
 			fmt.Println("terminalscore", version)
 			return
 		case "-h", "--help", "help":
-			fmt.Println("terminalscore — terminalde canlı futbol takibi")
+			fmt.Println("terminalscore: terminalde canlı futbol takibi")
 			fmt.Println()
-			fmt.Println("Kullanım: terminalscore [--version]")
-			fmt.Println("Program açıkken tuşlar ekranın altında yazar.")
+			fmt.Println("kullanım: terminalscore [--version]")
 			return
 		}
 	}
@@ -40,7 +36,6 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		// Bozuk ayar dosyası programı durdurmasın; favori takım yeniden sorulur.
 		fmt.Fprintln(os.Stderr, "uyarı: ayarlar okunamadı:", err)
 	}
 

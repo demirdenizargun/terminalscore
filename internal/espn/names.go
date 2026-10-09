@@ -1,6 +1,6 @@
 package espn
 
-// ESPN takım adlarını Türkçe karakter olmadan veriyor; bilinenleri düzeltiyoruz.
+// ESPN Türkçe karakter kullanmıyor
 var turkishNames = map[string]string{
 	"Besiktas":            "Beşiktaş",
 	"Fenerbahce":          "Fenerbahçe",

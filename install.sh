@@ -1,13 +1,8 @@
 #!/bin/sh
-# terminalscore kurulum betiği (Linux / macOS).
-#
 #   curl -fsSL https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.sh | sh
 #
-# Ayarlanabilenler (ortam değişkeni olarak):
-#   TERMINALSCORE_VERSION      kurulacak sürüm, ör. 0.1.0 (varsayılan: en son sürüm)
-#   TERMINALSCORE_INSTALL_DIR  kurulum klasörü (varsayılan: ~/.local/bin)
-#
-# Her şey main içinde: bağlantı yarıda koparsa yarım betik çalışmaz.
+# TERMINALSCORE_VERSION=0.1.0       belirli sürüm (varsayılan: en son)
+# TERMINALSCORE_INSTALL_DIR=...     varsayılan: ~/.local/bin
 
 set -eu
 
@@ -35,7 +30,7 @@ detect_arch() {
 }
 
 latest_version() {
-	# github.com/.../releases/latest, en son sürümün sayfasına yönlendirir: .../tag/v0.1.0
+	# releases/latest -> .../releases/tag/v0.1.0
 	url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest") ||
 		fail "en son sürüm bulunamadı (henüz sürüm yayınlanmamış olabilir)"
 	tag=${url##*/}

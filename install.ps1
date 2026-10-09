@@ -1,9 +1,6 @@
-# terminalscore kurulum betiği (Windows).
-#
 #   irm https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.ps1 | iex
 #
-# Programı %LOCALAPPDATA%\Programs\terminalscore klasörüne kurar ve bu klasörü
-# kullanıcının PATH'ine ekler (yönetici izni gerekmez).
+# %LOCALAPPDATA%\Programs\terminalscore altına kurar, kullanıcı PATH'ine ekler.
 
 $ErrorActionPreference = 'Stop'
 $repo = 'demirdenizargun/terminalscore'
@@ -47,8 +44,9 @@ function Install-TerminalScore {
         Write-Host "Kuruldu: $installDir\terminalscore.exe"
 
         $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        if (-not $userPath) { $userPath = '' }
         if (-not (($userPath -split ';') -contains $installDir)) {
-            [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $installDir), 'User')
+            [Environment]::SetEnvironmentVariable('Path', (($userPath.TrimEnd(';') + ';' + $installDir).TrimStart(';')), 'User')
             Write-Host 'Klasör PATH''e eklendi. Yeni bir terminal açıp şunu yaz: terminalscore'
         } else {
             Write-Host 'Başlatmak için: terminalscore'

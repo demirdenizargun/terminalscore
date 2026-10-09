@@ -1,28 +1,24 @@
 package espn
 
-// LeagueKind, ligin türü: puan durumu ve takım araması buna göre yapılır.
 type LeagueKind int
 
 const (
-	Domestic    LeagueKind = iota // ulusal lig: puan durumu var, takımları favori aramasında çıkar
-	Continental                   // kulüp turnuvası (ŞL, Avrupa Ligi): puan durumu var
-	Cup                           // ulusal kupa: puan durumu yok
-	National                      // milli takım turnuvası / hazırlık maçı
+	Domestic    LeagueKind = iota // puan durumu var, takımlar favori aramasında
+	Continental                   // ŞL, Avrupa Ligi vb.
+	Cup
+	National // milli takımlar
 )
 
 type League struct {
-	Slug string // ESPN kısa kodu, ör. "tur.1"
-	ID   string // ESPN sayı kimliği; maç kimliğindeki "l:3946" kısmı
+	Slug string // ör. "tur.1"
+	ID   string // uid'deki "l:3946"
 	Name string
 	Kind LeagueKind
 }
 
-// HasStandings, ligin puan durumu sekmesinde gösterilip gösterilmeyeceği.
 func (l League) HasStandings() bool { return l.Kind == Domestic || l.Kind == Continental }
 
-// Leagues, büyükten küçüğe sıralı lig listesi. Sıra, maç listesindeki
-// lig sırasını belirler (favori takımın ligi her zaman en üste alınır).
-// Kodlar ve kimlikler ESPN'den tek tek denenerek doğrulandı.
+// Büyükten küçüğe; maç listesindeki lig sırası buradan geliyor.
 var Leagues = []League{
 	{"fifa.world", "606", "Dünya Kupası", National},
 	{"uefa.euro", "781", "Avrupa Şampiyonası", National},
@@ -94,8 +90,7 @@ var leagueIndex = func() map[string]int {
 	return idx
 }()
 
-// LeagueRank, ligin listedeki sırası (küçük = büyük lig).
-// Listede olmayan ligler için len(Leagues) döner, yani en sona düşer.
+// Listede olmayan lig en sona düşer.
 func LeagueRank(idOrSlug string) int {
 	if i, ok := leagueIndex[idOrSlug]; ok {
 		return i
@@ -103,7 +98,6 @@ func LeagueRank(idOrSlug string) int {
 	return len(Leagues)
 }
 
-// FindLeague, kimlik ya da kısa koda göre ligi bulur.
 func FindLeague(idOrSlug string) (League, bool) {
 	if i, ok := leagueIndex[idOrSlug]; ok {
 		return Leagues[i], true

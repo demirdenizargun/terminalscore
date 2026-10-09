@@ -14,10 +14,12 @@ const (
 	statusW = 7
 	teamW   = 22
 	scoreW  = 7
-	sideW   = 30 // maç detayında ev sahibi / deplasman olay sütunları
+	sideW   = 30 // detay ekranında ev sahibi / deplasman sütunu
 	minuteW = 9
 
-	chromeLines = 6 // üst başlık + alt bilgi satırları
+	chromeLines    = 6 // başlık + alt bilgi
+	detailFixed    = 4 // kaydırırken yerinde kalan skor bölümü
+	standingsFixed = 3
 )
 
 func (m Model) View() string {
@@ -65,8 +67,7 @@ func (m Model) headerView() string {
 }
 
 func (m Model) footerView(help string) string {
-	// Durum satırı yalnızca hata olduğunda dolar; yoksa boş kalır ki
-	// ekran düzeni kaymasın.
+	// hata yoksa da satır boş kalıyor, düzen kaymasın
 	var status string
 	if m.err != nil {
 		status = errorStyle.Render("Hata: " + m.err.Error())
@@ -109,7 +110,6 @@ func (m Model) matchesView() string {
 		lines = append(lines, m.matchRow(mt, selected))
 	}
 
-	// İmleç ekranda kalsın diye listeyi imlecin etrafında kesiyoruz.
 	visible := m.height - chromeLines - 2
 	start := 0
 	if visible > 0 && len(lines) > visible {
@@ -185,8 +185,7 @@ func (m Model) matchRow(mt espn.Match, selected bool) string {
 	return marker + star + status + padLeft(home, teamW) + " " + score + " " + padRight(away, teamW) + goal
 }
 
-// blink, saniyede bir zemin rengi değiştirerek yanıp sönme etkisi verir
-// (ekran her saniye yeniden çizildiği için).
+// ekran saniyede bir çizildiği için tek/çift saniyeye göre renk değiştirmek yetiyor
 func blink(s string) string {
 	if time.Now().Second()%2 == 0 {
 		return goalStyle.Render(s)
@@ -195,9 +194,13 @@ func blink(s string) string {
 }
 
 func (m Model) detailView() string {
+	return m.window(m.detailLines(), detailFixed, m.scroll, 0)
+}
+
+func (m Model) detailLines() []string {
 	mt, ok := m.selectedMatch()
 	if !ok {
-		return mutedStyle.Render("Maç bulunamadı.")
+		return []string{mutedStyle.Render("Maç bulunamadı.")}
 	}
 
 	width := 2*sideW + minuteW
@@ -223,7 +226,6 @@ func (m Model) detailView() string {
 		center(mutedStyle.Render(info), width),
 		mutedStyle.Render(strings.Repeat("─", width)),
 	)
-	const fixed = 4 // kaydırılırken sabit kalan üst kısım
 
 	switch {
 	case !m.eventsLoaded:
@@ -233,7 +235,6 @@ func (m Model) detailView() string {
 	}
 
 	for _, ev := range m.events {
-		// devre arası, maç sonu gibi ara başlıklar; boş karşılıklılar (gecikmeler) gizlenir
 		if label, ok := periodLabels[ev.Label]; ok {
 			if label != "" {
 				lines = append(lines, center(mutedStyle.Render("── "+label+" ──"), width))
@@ -246,7 +247,7 @@ func (m Model) detailView() string {
 			if i == 0 {
 				minute = ev.Minute
 			} else {
-				icon = " " // değişikliğin ikinci satırında ikon ve dakika tekrarlanmaz
+				icon = " "
 			}
 			minuteCol := center(mutedStyle.Render(minute), minuteW)
 			text = ansi.Truncate(text, sideW-4, "…")
@@ -260,13 +261,11 @@ func (m Model) detailView() string {
 			}
 		}
 	}
-
-	return m.window(lines, fixed, m.scroll, 0)
+	return lines
 }
 
-// window, ekrana sığmayan satırlardan görünür kısmı seçer. İlk `fixed`
-// satır hep görünür, kalanı `offset` kadar kaydırılır. `extra`, gövdenin
-// üstüne eklenen başka satırların sayısıdır (ör. tarih satırı).
+// window ekrana sığan kısmı keser: ilk `fixed` satır sabit, gerisi `offset`
+// kadar kayar. `extra` gövdenin üstündeki ek satır sayısı.
 func (m Model) window(lines []string, fixed, offset, extra int) string {
 	visible := m.height - chromeLines - extra
 	if m.height == 0 || visible <= fixed || len(lines) <= visible {
@@ -280,8 +279,15 @@ func (m Model) window(lines []string, fixed, offset, extra int) string {
 	return strings.Join(out, "\n")
 }
 
-// periodLabels, ESPN'in takımsız olaylarının Türkçe karşılıkları.
-// Boş karşılık, olayın gösterilmeyeceği anlamına gelir.
+func (m Model) maxScroll(lines []string, fixed int) int {
+	room := m.height - chromeLines - fixed
+	if m.height == 0 || room <= 0 {
+		return 0
+	}
+	return max(len(lines)-fixed-room, 0)
+}
+
+// takımsız olaylar; boş olanlar gösterilmiyor
 var periodLabels = map[string]string{
 	"Kickoff":          "Maç başladı",
 	"Halftime":         "Devre arası",
@@ -295,8 +301,7 @@ var periodLabels = map[string]string{
 	"End Delay":        "",
 }
 
-// describeEvent, olayın ikonunu ve satır(lar)ını döndürür.
-// Oyuncu değişikliği iki satırdır: giren ve çıkan oyuncu.
+// oyuncu değişikliği iki satır: giren, çıkan
 func describeEvent(ev espn.Event) (icon string, lines []string) {
 	player := func(i int) string {
 		if i < len(ev.Players) {
@@ -327,6 +332,10 @@ func describeEvent(ev espn.Event) (icon string, lines []string) {
 }
 
 func (m Model) standingsView() string {
+	return m.window(m.standingsLines(), standingsFixed, m.scroll, 0)
+}
+
+func (m Model) standingsLines() []string {
 	league := standingLeagues[m.standingsIdx]
 	title := "◀  " + leagueStyle.Render(league.Name) + "  ▶" +
 		mutedStyle.Render(fmt.Sprintf("  (%d/%d)", m.standingsIdx+1, len(standingLeagues)))
@@ -334,9 +343,9 @@ func (m Model) standingsView() string {
 	groups, ok := m.standings[league.Slug]
 	if !ok {
 		if m.err != nil {
-			return title + "\n\n" + mutedStyle.Render("Puan durumu alınamadı.")
+			return []string{title, "", mutedStyle.Render("Puan durumu alınamadı.")}
 		}
-		return title + "\n\n" + mutedStyle.Render("Yükleniyor...")
+		return []string{title, "", mutedStyle.Render("Yükleniyor...")}
 	}
 
 	lines := []string{
@@ -345,7 +354,6 @@ func (m Model) standingsView() string {
 		mutedStyle.Render(fmt.Sprintf("%3s  %-*s %3s %3s %3s %3s %4s %4s %4s %4s",
 			"#", teamW, "Takım", "O", "G", "B", "M", "AG", "YG", "AV", "P")),
 	}
-	const fixed = 3
 
 	favTeam := m.cfg.TeamID()
 	for gi, g := range groups {
@@ -368,10 +376,10 @@ func (m Model) standingsView() string {
 			lines = append(lines, row+points)
 		}
 	}
-	return m.window(lines, fixed, m.scroll, 0)
+	return lines
 }
 
-// compareScores: ev sahibi önde 1, deplasman önde -1, eşit/bilinmiyor 0.
+// 1: ev sahibi önde, -1: deplasman önde, 0: eşit ya da skor yok
 func compareScores(home, away string) int {
 	h, a := scoreValue(home), scoreValue(away)
 	switch {

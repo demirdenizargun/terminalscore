@@ -1,8 +1,4 @@
-// Package config, kullanıcı ayarlarını (favori takım) diskte saklar.
-//
-// Dosya yeri işletim sistemine göre değişir:
-//   - Linux:   ~/.config/terminalscore/config.json
-//   - Windows: %AppData%\terminalscore\config.json
+// Package config: ~/.config/terminalscore/config.json (Windows'ta %AppData% altında).
 package config
 
 import (
@@ -14,19 +10,16 @@ import (
 )
 
 type Config struct {
-	// SetupDone, ilk açılıştaki favori takım sorusunun cevaplandığını
-	// (ya da atlandığını) gösterir; bir daha sorulmaz.
-	SetupDone    bool          `json:"setup_done"`
+	SetupDone    bool          `json:"setup_done"` // favori takım soruldu (seçildi ya da atlandı)
 	FavoriteTeam *FavoriteTeam `json:"favorite_team,omitempty"`
 }
 
 type FavoriteTeam struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
-	LeagueSlug string `json:"league"` // takımın ulusal ligi, ör. "tur.1"
+	LeagueSlug string `json:"league"` // ör. "tur.1"
 }
 
-// TeamID, favori takım yoksa boş döner; böylece çağıranlar nil kontrolü yapmaz.
 func (c Config) TeamID() string {
 	if c.FavoriteTeam == nil {
 		return ""
@@ -49,7 +42,7 @@ func path() (string, error) {
 	return filepath.Join(dir, "terminalscore", "config.json"), nil
 }
 
-// Load, ayar dosyasını okur. Dosya yoksa (ilk açılış) boş ayar döner.
+// Dosya yoksa (ilk açılış) boş Config döner.
 func Load() (Config, error) {
 	var c Config
 	p, err := path()

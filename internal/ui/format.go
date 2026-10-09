@@ -17,7 +17,7 @@ func turkishDate(t time.Time) string {
 	return fmt.Sprintf("%d %s %d, %s", t.Day(), months[t.Month()-1], t.Year(), weekdays[t.Weekday()])
 }
 
-// statusText, maç listesinin sol sütununda görünen kısa durum yazısı.
+// listedeki kısa durum: saat, dakika, İY, MS...
 func statusText(m espn.Match, loc *time.Location) string {
 	switch m.State {
 	case espn.Live:
@@ -48,7 +48,6 @@ func statusText(m espn.Match, loc *time.Location) string {
 	return m.Kickoff.In(loc).Format("15:04")
 }
 
-// statusLong, maç detayı ekranındaki açıklayıcı durum yazısı.
 func statusLong(m espn.Match, loc *time.Location) string {
 	switch s := statusText(m, loc); s {
 	case "İY":

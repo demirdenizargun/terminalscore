@@ -1,5 +1,3 @@
-# "v" ile başlayan bir etiket gönderildiğinde (ör. git tag v0.1.0 && git push --tags)
-# GitHub'ın sunucularında GoReleaser'ı çalıştırıp sürümü yayınlar.
 name: release
 
 on:
@@ -7,7 +5,7 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write # sürüm sayfası oluşturup dosya yüklemek için
+  contents: write
 
 jobs:
   goreleaser:
@@ -15,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # değişiklik listesi için bütün git geçmişi gerekir
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:

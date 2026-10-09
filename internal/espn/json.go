@@ -2,8 +2,7 @@ package espn
 
 import "encoding/json"
 
-// Bu dosyadaki tipler sadece ESPN'in JSON cevaplarını okumak için var;
-// uygulamanın geri kalanı espn.go'daki sade tipleri kullanır.
+// ESPN cevaplarının sadece kullandığımız alanları.
 
 type teamJSON struct {
 	ID               string `json:"id"`
@@ -92,8 +91,7 @@ type standingsJSON struct {
 	} `json:"children"`
 }
 
-// flexString, ESPN'in bazen metin ("2") bazen sayı (2) olarak
-// gönderdiği alanları tek tipte okur.
+// skor bazen "2" bazen 2 olarak geliyor
 type flexString string
 
 func (f *flexString) UnmarshalJSON(b []byte) error {

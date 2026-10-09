@@ -1,5 +1,4 @@
-// Package espn, ESPN'in herkese açık (anahtarsız) futbol API'sinden
-// maç, maç olayı, puan durumu ve takım verisini çeker.
+// Package espn, ESPN'in anahtarsız futbol API'si için istemci.
 package espn
 
 import (
@@ -14,7 +13,7 @@ import (
 
 const baseURL = "https://site.api.espn.com/apis"
 
-// allLeagues, ESPN'de tüm liglerin maçlarını tek istekte döndüren yol.
+// "all": bütün ligler tek istekte
 const allLeagues = "all"
 
 type Client struct {
@@ -25,7 +24,6 @@ func New() *Client {
 	return &Client{http: &http.Client{Timeout: 20 * time.Second}}
 }
 
-// State, maçın genel durumu: başlamadı, oynanıyor, bitti.
 type State string
 
 const (
@@ -43,19 +41,18 @@ type Team struct {
 
 type Match struct {
 	ID         string
-	LeagueID   string // ESPN lig kimliği, ör. "3946"
+	LeagueID   string // ör. "3946"
 	LeagueName string
 	Kickoff    time.Time
 	Home, Away Team
 	HomeScore  string
 	AwayScore  string
 	State      State
-	StatusName string // ESPN durum kodu, ör. STATUS_HALFTIME
-	Clock      string // ör. "67'" veya "90'+4'"
+	StatusName string // ör. STATUS_HALFTIME
+	Clock      string // ör. "67'", "90'+4'"
 	Venue      string
 }
 
-// HasTeam, takımın bu maçta oynayıp oynamadığını söyler.
 func (m Match) HasTeam(teamID string) bool {
 	return teamID != "" && (m.Home.ID == teamID || m.Away.ID == teamID)
 }
@@ -71,13 +68,12 @@ const (
 	PenaltyMissed
 )
 
-// Event, maç içindeki bir olay (gol, kart, oyuncu değişikliği...).
 type Event struct {
 	Minute  string
 	Kind    EventKind
-	Label   string // ESPN'in olay adı, bilinmeyen türler için
+	Label   string // ESPN'deki adı (type.text)
 	TeamID  string
-	Players []string // değişiklikte [0] giren, [1] çıkan oyuncu
+	Players []string // değişiklikte [0] giren, [1] çıkan
 	Penalty bool
 	OwnGoal bool
 }
@@ -96,14 +92,12 @@ type Standing struct {
 
 func (s Standing) GoalDiff() int { return s.GoalsFor - s.GoalsAgainst }
 
-// StandingGroup, puan durumunda bir tablo. Ligde tek tablo olur;
-// grup usulü turnuvalarda her grup ayrı tablodur.
+// Ligde tek grup olur, grup usulü turnuvalarda birden fazla.
 type StandingGroup struct {
 	Name string
 	Rows []Standing
 }
 
-// Matches, verilen gündeki bütün liglerin maçlarını döndürür.
 func (c *Client) Matches(ctx context.Context, day time.Time) ([]Match, error) {
 	url := fmt.Sprintf("%s/site/v2/sports/soccer/%s/scoreboard?dates=%s&limit=1000",
 		baseURL, allLeagues, day.Format("20060102"))
@@ -122,7 +116,7 @@ func (c *Client) Matches(ctx context.Context, day time.Time) ([]Match, error) {
 		m := Match{
 			ID:         e.ID,
 			LeagueID:   leagueIDFromUID(e.UID),
-			LeagueName: comp.AltGameNote,
+			LeagueName: leagueName(comp.AltGameNote),
 			Kickoff:    parseTime(e.Date),
 			State:      State(e.Status.Type.State),
 			StatusName: e.Status.Type.Name,
@@ -145,7 +139,6 @@ func (c *Client) Matches(ctx context.Context, day time.Time) ([]Match, error) {
 	return matches, nil
 }
 
-// Events, bir maçın önemli olaylarını (gol, kart, değişiklik) döndürür.
 func (c *Client) Events(ctx context.Context, matchID string) ([]Event, error) {
 	url := fmt.Sprintf("%s/site/v2/sports/soccer/%s/summary?event=%s",
 		baseURL, allLeagues, matchID)
@@ -171,7 +164,6 @@ func (c *Client) Events(ctx context.Context, matchID string) ([]Event, error) {
 	return events, nil
 }
 
-// Standings, bir ligin (kısa koduyla, ör. "tur.1") puan durumunu döndürür.
 func (c *Client) Standings(ctx context.Context, leagueSlug string) ([]StandingGroup, error) {
 	url := fmt.Sprintf("%s/v2/sports/soccer/%s/standings", baseURL, leagueSlug)
 
@@ -217,7 +209,6 @@ func (c *Client) Standings(ctx context.Context, leagueSlug string) ([]StandingGr
 	return groups, nil
 }
 
-// Teams, bir ligdeki takımları döndürür.
 func (c *Client) Teams(ctx context.Context, leagueSlug string) ([]Team, error) {
 	url := fmt.Sprintf("%s/site/v2/sports/soccer/%s/teams", baseURL, leagueSlug)
 
@@ -242,7 +233,7 @@ func (c *Client) get(ctx context.Context, url string, out any) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "terminalscore/0.2")
+	req.Header.Set("User-Agent", "terminalscore")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -256,7 +247,7 @@ func (c *Client) get(ctx context.Context, url string, out any) error {
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-// Maç kimliği "s:600~l:3946~e:401879276" biçiminde; lig kimliği "l:" sonrası.
+// "s:600~l:3946~e:401879276" -> "3946"
 func leagueIDFromUID(uid string) string {
 	for _, part := range strings.Split(uid, "~") {
 		if id, ok := strings.CutPrefix(part, "l:"); ok {
@@ -264,6 +255,12 @@ func leagueIDFromUID(uid string) string {
 		}
 	}
 	return ""
+}
+
+// "UEFA Europa League, League Phase" -> "UEFA Europa League"
+func leagueName(note string) string {
+	name, _, _ := strings.Cut(note, ", ")
+	return name
 }
 
 func classify(t string) (kind EventKind, penalty, ownGoal bool) {
@@ -286,7 +283,7 @@ func classify(t string) (kind EventKind, penalty, ownGoal bool) {
 	return OtherEvent, false, false
 }
 
-// ESPN tarihleri bazen saniyesiz geliyor ("2026-10-09T17:00Z").
+// tarih bazen saniyesiz geliyor: "2026-10-09T17:00Z"
 func parseTime(s string) time.Time {
 	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04Z07:00"} {
 		if t, err := time.Parse(layout, s); err == nil {

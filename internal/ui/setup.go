@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/demirdenizargun/terminalscore/internal/config"
 	"github.com/demirdenizargun/terminalscore/internal/espn"
@@ -15,7 +16,7 @@ import (
 
 const maxResults = 12
 
-// setupModel, favori takım seçme ekranının durumu.
+// favori takım seçme ekranı
 type setupModel struct {
 	query   string
 	options []teamOption
@@ -26,17 +27,12 @@ type setupModel struct {
 type teamOption struct {
 	team   espn.Team
 	league espn.League
-	folded string // aramada kullanılan sade ad (küçük harf, Türkçe karaktersiz)
+	folded string // fold(team.Name)
 }
 
 type teamsMsg struct{ options []teamOption }
 
-// fetchAllTeams, bütün ulusal liglerin takımlarını aynı anda çeker.
-//
-// Go'da "go func() {...}()" bir goroutine başlatır: fonksiyon arka planda,
-// diğerleriyle eşzamanlı çalışır. 40'tan fazla ligi tek tek beklemek yerine
-// hepsini birden isteriz. sync.WaitGroup hepsinin bitmesini beklemeye,
-// sync.Mutex de aynı listeye aynı anda yazılmasını engellemeye yarar.
+// Ulusal liglerin takımlarını paralel çeker (~45 istek).
 func fetchAllTeams(client *espn.Client) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -56,7 +52,7 @@ func fetchAllTeams(client *espn.Client) tea.Cmd {
 				defer wg.Done()
 				teams, err := client.Teams(ctx, league.Slug)
 				if err != nil {
-					return // bir lig gelmezse diğerleriyle devam
+					return
 				}
 				mu.Lock()
 				defer mu.Unlock()
@@ -67,7 +63,7 @@ func fetchAllTeams(client *espn.Client) tea.Cmd {
 		}
 		wg.Wait()
 
-		// Büyük ligin takımları önce; aynı takım iki ligde çıkarsa büyük olanda kalır.
+		// aynı takım iki ligde varsa büyük olanda kalsın
 		sort.SliceStable(options, func(i, j int) bool {
 			ri, rj := espn.LeagueRank(options[i].league.Slug), espn.LeagueRank(options[j].league.Slug)
 			if ri != rj {
@@ -87,8 +83,7 @@ func fetchAllTeams(client *espn.Client) tea.Cmd {
 	}
 }
 
-// results, arama kutusundaki metne uyan takımlar: adı aramayla
-// başlayanlar önce, sonra adında geçenler.
+// önce adı aramayla başlayanlar, sonra içinde geçenler
 func (s setupModel) results() []teamOption {
 	q := fold(strings.TrimSpace(s.query))
 	if q == "" {
@@ -115,8 +110,7 @@ func (m Model) updateSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
-	case tea.KeyEsc:
-		// İlk açılışta "atla" demek; sonradan açıldıysa favori aynen kalır.
+	case tea.KeyEsc: // atla; favori varsa olduğu gibi kalır
 		m.cfg.SetupDone = true
 		return m.closeSetup()
 	case tea.KeyEnter:
@@ -150,7 +144,7 @@ func (m Model) closeSetup() (tea.Model, tea.Cmd) {
 	if err := m.cfg.Save(); err != nil {
 		m.err = err
 	}
-	m.selectedID = "" // sıra değişti; imleç en üstten başlasın
+	m.selectedID = "" // sıralama değişti, imleç başa
 	m.sortMatches()
 	if _, ok := m.standings[m.standingsSlug()]; !ok {
 		return m, m.fetchStandings()
@@ -169,6 +163,9 @@ func (m Model) setupView() string {
 	switch {
 	case !s.loaded:
 		b.WriteString(mutedStyle.Render("  Takımlar yükleniyor..."))
+	case len(s.options) == 0:
+		b.WriteString(errorStyle.Render("  Takım listesi alınamadı, internet bağlantını kontrol et.") + "\n")
+		b.WriteString(mutedStyle.Render("  esc ile şimdilik atlayıp sonra f tuşuyla tekrar deneyebilirsin."))
 	case strings.TrimSpace(s.query) == "":
 		b.WriteString(mutedStyle.Render("  Takım adını yazmaya başla (ör. galatasaray, besiktas, real madrid)"))
 	default:
@@ -177,13 +174,13 @@ func (m Model) setupView() string {
 			b.WriteString(mutedStyle.Render("  Eşleşen takım yok."))
 		}
 		for i, o := range res {
-			line := padRight(o.team.Name, 26) + mutedStyle.Render(o.league.Name)
+			name := padRight(ansi.Truncate(o.team.Name, 25, "…"), 26)
 			if i == s.cursor {
-				b.WriteString(selectedStyle.Render("▶ ") + selectedStyle.Render(padRight(o.team.Name, 26)) + mutedStyle.Render(o.league.Name))
+				b.WriteString(selectedStyle.Render("▶ " + name))
 			} else {
-				b.WriteString("  " + line)
+				b.WriteString("  " + name)
 			}
-			b.WriteString("\n")
+			b.WriteString(mutedStyle.Render(o.league.Name) + "\n")
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -198,8 +195,7 @@ var foldReplacer = strings.NewReplacer(
 	"ú", "u", "ù", "u", "û", "u", "ñ", "n", "ß", "ss",
 )
 
-// fold, aramayı Türkçe karakter ve aksanlardan bağımsız yapar:
-// "Beşiktaş", "besiktas" ve "BEŞİKTAŞ" aynı sonucu verir.
+// "BEŞİKTAŞ", "Beşiktaş" -> "besiktas"
 func fold(s string) string {
 	s = strings.ReplaceAll(s, "İ", "i")
 	return foldReplacer.Replace(strings.ToLower(s))

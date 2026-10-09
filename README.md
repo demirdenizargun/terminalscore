@@ -1,111 +1,81 @@
 # terminalscore
 
-Terminalde mackolik tarzı futbol takibi: dünyanın her yerinden günün maçları, canlı skor,
-maç olayları ve puan durumları. Veri ESPN'in herkese açık API'sinden gelir, API anahtarı gerekmez.
+Terminalde mackolik tarzı canlı skor. Günün bütün maçları, maç olayları ve puan durumları;
+veri ESPN'den geliyor, API anahtarı gerekmiyor.
 
-- Maçlar lig büyüklüğüne göre sıralanır (Şampiyonlar Ligi, Premier Lig, LaLiga, ...).
-- İlk açılışta favori takımın sorulur; onun maçının olduğu turnuva ve kendi ligi en üstte görünür.
-- Puan durumu sekmesinde 46 lig ve kulüp turnuvası arasında gezilebilir.
+İlk açılışta favori takımını soruyor; o takımın maçı olan turnuva ve kendi ligi listenin
+en üstüne çıkıyor. Diğer ligler büyüklük sırasıyla geliyor.
 
 ## Kurulum
 
-Kurulumdan sonra terminale `terminalscore` yazman yeterli. Go ya da başka bir şey kurmana gerek yok.
-
-**Linux / macOS**
+Linux / macOS:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.sh | sh
 ```
 
-Program `~/.local/bin` klasörüne kurulur (yönetici izni gerekmez). Betik, indirdiği dosyanın
-bozulmadığını sağlama değeriyle doğrular.
+`~/.local/bin` altına kurar, sudo istemez.
 
-**Ubuntu / Debian** — [sürüm sayfasından](https://github.com/demirdenizargun/terminalscore/releases/latest) `.deb` dosyasını indir:
-
-```sh
-sudo apt install ./terminalscore_*_linux_amd64.deb
-```
-
-**Fedora / openSUSE** — sürüm sayfasından `.rpm` dosyasını indir:
-
-```sh
-sudo dnf install ./terminalscore_*_linux_amd64.rpm
-```
-
-**Windows** (PowerShell)
+Windows (PowerShell):
 
 ```powershell
 irm https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.ps1 | iex
 ```
 
-**Elle kurulum** — [sürüm sayfasından](https://github.com/demirdenizargun/terminalscore/releases/latest)
-sistemine uygun arşivi indir, içindeki `terminalscore` dosyasını PATH'teki bir klasöre koy.
-ARM işlemciler (Raspberry Pi, Apple M serisi) için `arm64` dosyalarını seç.
+Debian/Ubuntu ve Fedora için `.deb` / `.rpm` paketleri, diğer sistemler için arşivler
+[releases](https://github.com/demirdenizargun/terminalscore/releases/latest) sayfasında:
 
-**Go kullananlar için**
+```sh
+sudo apt install ./terminalscore_*_linux_amd64.deb
+sudo dnf install ./terminalscore_*_linux_amd64.rpm
+```
+
+Go ile:
 
 ```sh
 go install github.com/demirdenizargun/terminalscore@latest
 ```
 
-Kurulu sürümü görmek için: `terminalscore --version`
+## Kullanım
 
-## Geliştirme
+```
+terminalscore
+```
+
+| Tuş | |
+|---|---|
+| ← → | gün değiştir (puan durumunda lig) |
+| t | bugün |
+| ↑ ↓ | maç seç / kaydır |
+| PgUp PgDn | 10 maç atla |
+| enter | maç detayı |
+| esc | geri |
+| tab | maçlar / puan durumu |
+| f | favori takım |
+| r | yenile |
+| q | çıkış |
+
+Canlı maç varken liste 10 saniyede, açık maç detayı 5 saniyede bir yenileniyor.
+Gol olan maç bir dakika boyunca GOL! diye yanıp sönüyor.
+
+Ayarlar `~/.config/terminalscore/config.json` (Windows'ta `%AppData%\terminalscore\config.json`)
+dosyasında. Silersen favori takım tekrar sorulur.
+
+## Derleme
 
 ```sh
 go build -o terminalscore .
-./terminalscore
 ```
 
-Windows'ta Linux için derlemek (PowerShell):
-
-```powershell
-$env:GOOS = "linux"; $env:GOARCH = "amd64"; go build -o terminalscore-linux-amd64 .
-```
-
-### Sürüm yayınlama
-
-Sürümler [GoReleaser](https://goreleaser.com) ile GitHub Actions üzerinde otomatik hazırlanır.
-Bir etiket göndermek yeterli:
+Sürüm çıkarmak için tag atmak yeterli, gerisini GitHub Actions + GoReleaser hallediyor:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.0 && git push origin v0.1.0
 ```
 
-Bütün platformların dosyaları, `.deb`/`.rpm` paketleri ve `checksums.txt` sürüm sayfasına yüklenir.
-Yayınlamadan önce yerelde denemek için: `goreleaser release --snapshot --clean` (çıktı `dist/` klasörüne).
+Yerelde denemek için `goreleaser release --snapshot --clean`.
 
-## Tuşlar
+## Lisans
 
-| Tuş | İşlev |
-|---|---|
-| ← / → | Önceki / sonraki gün (puan durumunda: önceki / sonraki lig) |
-| t | Bugüne dön |
-| ↑ / ↓ | Maç seç / kaydır |
-| PgUp / PgDn | 10 maç yukarı / aşağı |
-| enter | Maç detayı |
-| esc | Geri |
-| tab | Maçlar / Puan Durumu |
-| f | Favori takımı değiştir |
-| r | Yenile |
-| q | Çıkış |
-
-Canlı maç varken maç listesi 10 saniyede, açık maç detayı 5 saniyede bir yenilenir
-(ESPN verisi sunucuda bu sürelerde güncelleniyor). Gol olan maç bir dakika boyunca
-yanıp sönen **GOL!** etiketiyle işaretlenir.
-
-## Ayarlar
-
-Favori takım şu dosyada saklanır; silersen ilk açılıştaki soru tekrar gelir:
-
-- Linux: `~/.config/terminalscore/config.json`
-- Windows: `%AppData%\terminalscore\config.json`
-
-## Lisans ve veri
-
-Kod [MIT lisansı](LICENSE) ile dağıtılır.
-
-Maç verileri ESPN'e aittir. Bu proje ESPN ile bağlantılı değildir ve ESPN tarafından
-desteklenmez; kullanılan adresler ESPN'in resmi olarak belgelenmiş bir API'si değildir
-ve haber verilmeden değişebilir.
+MIT. Maç verileri ESPN'e aittir; bu projenin ESPN ile bir bağlantısı yok. Kullanılan
+adresler resmi olarak belgelenmiş bir API değil, her an değişebilir.

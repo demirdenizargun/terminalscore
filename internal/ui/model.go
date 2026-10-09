@@ -1,9 +1,4 @@
-// Package ui, Bubble Tea ile terminal arayüzünü çizer.
-//
-// Bubble Tea "Elm mimarisi" kullanır:
-//   - Model: ekranın o anki durumu (hangi gün, hangi maçlar, imleç nerede...)
-//   - Update: bir mesaj (tuş, gelen veri, zamanlayıcı) gelince Model'i günceller
-//   - View: Model'den ekrana basılacak metni üretir
+// Package ui terminal arayüzü (Bubble Tea).
 package ui
 
 import (
@@ -18,17 +13,15 @@ import (
 	"github.com/demirdenizargun/terminalscore/internal/espn"
 )
 
-// Yenileme aralıkları ESPN'in önbellek sürelerine göre seçildi: maç listesi
-// sunucuda 10 sn, maç detayı 1 sn önbellekte tutuluyor. Daha sık sormak
-// aynı veriyi tekrar indirmek olur.
+// ESPN scoreboard'u 10 sn, summary'yi 1 sn cache'liyor; daha sık sormanın anlamı yok.
 const (
 	matchesRefresh   = 10 * time.Second
 	eventsRefresh    = 5 * time.Second
 	standingsRefresh = time.Minute
-	goalFlashFor     = time.Minute // gol olan maç bu süre boyunca "GOL!" ile işaretlenir
+	goalFlashFor     = time.Minute
 )
 
-// standingLeagues, puan durumu sekmesinde ←/→ ile gezilen ligler.
+// puan durumu sekmesinde ←/→ ile gezilen ligler
 var standingLeagues = func() []espn.League {
 	var out []espn.League
 	for _, l := range espn.Leagues {
@@ -54,28 +47,26 @@ type Model struct {
 	tab tab
 	day time.Time
 
-	matches       []espn.Match // ekrandaki sırayla: favori önce, sonra lig büyüklüğü
+	matches       []espn.Match // ekrandaki sırada
 	matchesLoaded bool
-	selectedID    string // imleç maç kimliğiyle tutulur; yenilemede sıra değişse de kaybolmaz
+	selectedID    string // index yerine ID: yenilemede sıra değişebiliyor
 
-	standingsIdx int // standingLeagues içindeki seçili lig
+	standingsIdx int
 	standings    map[string][]espn.StandingGroup
 
-	detailID     string // boş değilse maç detayı ekranı açık
+	detailID     string
 	events       []espn.Event
 	eventsLoaded bool
 
-	scroll int // maç detayı ve puan durumunda kaydırma
+	scroll int
 
-	setup *setupModel // nil değilse favori takım seçme ekranı açık
+	setup *setupModel
 
-	goals map[string]time.Time // maç kimliği → son golün görüldüğü an
+	goals map[string]time.Time // maç ID -> golün görüldüğü an
 
-	// son istek zamanları; saniyelik tick bunlara bakıp yenileme kararı verir
 	matchesAsked, eventsAsked, standingsAsked time.Time
 
 	err           error
-	updated       time.Time
 	width, height int
 }
 
@@ -96,7 +87,6 @@ func New(client *espn.Client, loc *time.Location, cfg config.Config) Model {
 	return m
 }
 
-// Mesajlar: arka planda yapılan isteklerin sonuçları.
 type (
 	matchesMsg struct {
 		day     time.Time
@@ -143,14 +133,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case matchesMsg:
 		if !msg.day.Equal(m.day) {
-			return m, nil // kullanıcı bu arada başka güne geçmiş
+			return m, nil // bu arada gün değişmiş
 		}
 		m.err = msg.err
 		if msg.err == nil {
 			m.detectGoals(msg.matches)
 			m.matches = msg.matches
 			m.matchesLoaded = true
-			m.updated = time.Now()
 			m.sortMatches()
 		}
 
@@ -171,8 +160,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tickMsg:
-		// Her saniye çalışır: ekran yeniden çizilir ("x sn önce" sayacı, GOL!
-		// yanıp sönmesi) ve süresi dolan veriler yeniden istenir.
+		// saniyede bir: GOL! yanıp sönsün diye yeniden çizim + süresi dolanı yenile
 		now := time.Time(msg)
 		cmds := []tea.Cmd{tick()}
 		if m.hasActiveMatch() {
@@ -195,8 +183,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// detectGoals, yeni gelen skorları eskileriyle karşılaştırır; skoru artan
-// maçları "gol oldu" diye işaretler.
+// skoru bir önceki çekime göre artan maçları işaretler
 func (m *Model) detectGoals(fresh []espn.Match) {
 	old := make(map[string]espn.Match, len(m.matches))
 	for _, mt := range m.matches {
@@ -215,7 +202,6 @@ func (m *Model) detectGoals(fresh []espn.Match) {
 	}
 }
 
-// recentGoal, maçta son bir dakika içinde gol olup olmadığını söyler.
 func (m Model) recentGoal(matchID string) bool {
 	t, ok := m.goals[matchID]
 	return ok && time.Since(t) < goalFlashFor
@@ -251,7 +237,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			m.scroll = max(m.scroll-1, 0)
 		case "down", "j":
-			m.scroll++
+			m.scroll = min(m.scroll+1, m.maxScroll(m.detailLines(), detailFixed))
 		}
 		return m, nil
 	}
@@ -311,12 +297,11 @@ func (m Model) handleStandingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.scroll = max(m.scroll-1, 0)
 		return m, nil
 	case "down", "j":
-		m.scroll++
+		m.scroll = min(m.scroll+1, m.maxScroll(m.standingsLines(), standingsFixed))
 		return m, nil
 	default:
 		return m, nil
 	}
-	// lig değişti
 	m.scroll = 0
 	m.err = nil
 	if _, ok := m.standings[m.standingsSlug()]; ok {
@@ -363,12 +348,8 @@ func (m Model) selectedIndex() int {
 	return 0
 }
 
-// sortMatches, maçları ekrandaki sıraya dizer:
-//  1. favori takımın oynadığı lig/turnuva
-//  2. favori takımın kendi ligi
-//  3. lig büyüklüğü (espn.Leagues sırası), listede olmayanlar en sonda
-//
-// Aynı ligde favori takımın maçı başa, diğerleri başlama saatine göre.
+// Sıra: favori takımın oynadığı turnuva, favorinin kendi ligi, sonra lig
+// büyüklüğü (espn.Leagues). Lig içinde favorinin maçı önce, sonra saat.
 func (m *Model) sortMatches() {
 	favTeam := m.cfg.TeamID()
 	favLeagueID := ""
@@ -376,7 +357,7 @@ func (m *Model) sortMatches() {
 		favLeagueID = l.ID
 	}
 
-	favPlays := map[string]bool{} // favori takımın bugün oynadığı ligler
+	favPlays := map[string]bool{}
 	for _, mt := range m.matches {
 		if mt.HasTeam(favTeam) {
 			favPlays[mt.LeagueID] = true
@@ -416,7 +397,6 @@ func (m *Model) sortMatches() {
 		return a.ID < b.ID
 	})
 
-	// seçili maç artık yoksa (gün değişti vb.) en üsttekini seç
 	found := false
 	for _, mt := range m.matches {
 		if mt.ID == m.selectedID {
@@ -432,7 +412,7 @@ func (m *Model) sortMatches() {
 	}
 }
 
-// defaultStandingsIdx: favori takımın ligi, yoksa ilk ulusal lig.
+// favori takımın ligi, yoksa ilk ulusal lig
 func (m Model) defaultStandingsIdx() int {
 	first := -1
 	for i, l := range standingLeagues {
@@ -448,8 +428,7 @@ func (m Model) defaultStandingsIdx() int {
 
 func (m Model) standingsSlug() string { return standingLeagues[m.standingsIdx].Slug }
 
-// hasActiveMatch: canlı maç varsa ya da başlama saati gelmiş ama
-// henüz "başladı" görünmeyen maç varsa otomatik yenileme yapılır.
+// Canlı maç ya da saati gelmiş ama ESPN'de henüz başlamamış görünen maç varsa true.
 func (m Model) hasActiveMatch() bool {
 	now := time.Now()
 	for _, mt := range m.matches {
