@@ -7,6 +7,27 @@ maç olayları ve puan durumları. Veri ESPN'in herkese açık API'sinden gelir,
 - İlk açılışta favori takımın sorulur; onun maçının olduğu turnuva ve kendi ligi en üstte görünür.
 - Puan durumu sekmesinde 46 lig ve kulüp turnuvası arasında gezilebilir.
 
+## Kurulum
+
+Proje klasöründe bir kez çalıştırınca program her yerden `terminalscore` yazarak açılır:
+
+```sh
+go install .
+```
+
+Program `~/go/bin` (Windows'ta `%USERPROFILE%\go\bin`) klasörüne kurulur. Linux'ta bu
+klasör PATH'te değilse `~/.bashrc` dosyasına bir kez ekle:
+
+```sh
+export PATH="$PATH:$HOME/go/bin"
+```
+
+Go kurulu olmayan bir Linux makinede hazır dosyayı PATH'teki bir klasöre koymak yeterli:
+
+```sh
+install -m 755 terminalscore-linux-amd64 ~/.local/bin/terminalscore
+```
+
 ## Derleme
 
 ```sh
@@ -45,3 +66,11 @@ Favori takım şu dosyada saklanır; silersen ilk açılıştaki soru tekrar gel
 
 - Linux: `~/.config/terminalscore/config.json`
 - Windows: `%AppData%\terminalscore\config.json`
+
+## Lisans ve veri
+
+Kod [MIT lisansı](LICENSE) ile dağıtılır.
+
+Maç verileri ESPN'e aittir. Bu proje ESPN ile bağlantılı değildir ve ESPN tarafından
+desteklenmez; kullanılan adresler ESPN'in resmi olarak belgelenmiş bir API'si değildir
+ve haber verilmeden değişebilir.
