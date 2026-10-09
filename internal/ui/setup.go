@@ -9,8 +9,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"terminalscore/internal/config"
-	"terminalscore/internal/espn"
+	"github.com/demirdenizargun/terminalscore/internal/config"
+	"github.com/demirdenizargun/terminalscore/internal/espn"
 )
 
 const maxResults = 12

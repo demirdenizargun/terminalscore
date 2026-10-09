@@ -9,3 +9,4 @@ terminalscore-*
 .DS_Store
 Thumbs.db
 *~
+dist/

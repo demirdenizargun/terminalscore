@@ -1,4 +1,4 @@
-module terminalscore
+module github.com/demirdenizargun/terminalscore
 
 go 1.27.0
 

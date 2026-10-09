@@ -9,26 +9,48 @@ maç olayları ve puan durumları. Veri ESPN'in herkese açık API'sinden gelir,
 
 ## Kurulum
 
-Proje klasöründe bir kez çalıştırınca program her yerden `terminalscore` yazarak açılır:
+Kurulumdan sonra terminale `terminalscore` yazman yeterli. Go ya da başka bir şey kurmana gerek yok.
+
+**Linux / macOS**
 
 ```sh
-go install .
+curl -fsSL https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.sh | sh
 ```
 
-Program `~/go/bin` (Windows'ta `%USERPROFILE%\go\bin`) klasörüne kurulur. Linux'ta bu
-klasör PATH'te değilse `~/.bashrc` dosyasına bir kez ekle:
+Program `~/.local/bin` klasörüne kurulur (yönetici izni gerekmez). Betik, indirdiği dosyanın
+bozulmadığını sağlama değeriyle doğrular.
+
+**Ubuntu / Debian** — [sürüm sayfasından](https://github.com/demirdenizargun/terminalscore/releases/latest) `.deb` dosyasını indir:
 
 ```sh
-export PATH="$PATH:$HOME/go/bin"
+sudo apt install ./terminalscore_*_linux_amd64.deb
 ```
 
-Go kurulu olmayan bir Linux makinede hazır dosyayı PATH'teki bir klasöre koymak yeterli:
+**Fedora / openSUSE** — sürüm sayfasından `.rpm` dosyasını indir:
 
 ```sh
-install -m 755 terminalscore-linux-amd64 ~/.local/bin/terminalscore
+sudo dnf install ./terminalscore_*_linux_amd64.rpm
 ```
 
-## Derleme
+**Windows** (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.ps1 | iex
+```
+
+**Elle kurulum** — [sürüm sayfasından](https://github.com/demirdenizargun/terminalscore/releases/latest)
+sistemine uygun arşivi indir, içindeki `terminalscore` dosyasını PATH'teki bir klasöre koy.
+ARM işlemciler (Raspberry Pi, Apple M serisi) için `arm64` dosyalarını seç.
+
+**Go kullananlar için**
+
+```sh
+go install github.com/demirdenizargun/terminalscore@latest
+```
+
+Kurulu sürümü görmek için: `terminalscore --version`
+
+## Geliştirme
 
 ```sh
 go build -o terminalscore .
@@ -40,6 +62,19 @@ Windows'ta Linux için derlemek (PowerShell):
 ```powershell
 $env:GOOS = "linux"; $env:GOARCH = "amd64"; go build -o terminalscore-linux-amd64 .
 ```
+
+### Sürüm yayınlama
+
+Sürümler [GoReleaser](https://goreleaser.com) ile GitHub Actions üzerinde otomatik hazırlanır.
+Bir etiket göndermek yeterli:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Bütün platformların dosyaları, `.deb`/`.rpm` paketleri ve `checksums.txt` sürüm sayfasına yüklenir.
+Yayınlamadan önce yerelde denemek için: `goreleaser release --snapshot --clean` (çıktı `dist/` klasörüne).
 
 ## Tuşlar
 

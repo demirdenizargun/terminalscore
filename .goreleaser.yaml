@@ -1,0 +1,47 @@
+# Sürüm paketleme ayarı. GitHub'a "v0.1.0" gibi bir etiket gönderildiğinde
+# .github/workflows/release.yml bunu çalıştırır ve sürüm sayfasına
+# bütün platformlar için hazır dosyalar yükler.
+version: 2
+
+project_name: terminalscore
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0 # dış C kütüphanesi gerektirmeyen, her dağıtımda çalışan dosya
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # ör. terminalscore_0.1.0_linux_amd64.tar.gz — install.sh bu adı bekler
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+nfpms:
+  - package_name: terminalscore
+    vendor: demirdenizargun
+    homepage: https://github.com/demirdenizargun/terminalscore
+    maintainer: demirdenizargun <demirdenizargun@users.noreply.github.com>
+    description: Terminalde mackolik tarzı canlı futbol takibi
+    license: MIT
+    formats: [deb, rpm]
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^Merge"

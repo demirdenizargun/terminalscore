@@ -1,0 +1,30 @@
+# "v" ile başlayan bir etiket gönderildiğinde (ör. git tag v0.1.0 && git push --tags)
+# GitHub'ın sunucularında GoReleaser'ı çalıştırıp sürümü yayınlar.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # sürüm sayfası oluşturup dosya yüklemek için
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # değişiklik listesi için bütün git geçmişi gerekir
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"terminalscore/internal/espn"
+	"github.com/demirdenizargun/terminalscore/internal/espn"
 )
 
 const (

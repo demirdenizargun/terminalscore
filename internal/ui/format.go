@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"terminalscore/internal/espn"
+	"github.com/demirdenizargun/terminalscore/internal/espn"
 )
 
 var months = [...]string{"Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
