@@ -88,6 +88,8 @@ type Standing struct {
 	GoalsFor     int
 	GoalsAgainst int
 	Points       int
+	Zone         string // ör. "Champions League", "Relegation"
+	ZoneColor    string // ESPN'in önerdiği renk, "#81D6AC"
 }
 
 func (s Standing) GoalDiff() int { return s.GoalsFor - s.GoalsAgainst }
@@ -176,7 +178,10 @@ func (c *Client) Standings(ctx context.Context, leagueSlug string) ([]StandingGr
 	for _, child := range r.Children {
 		g := StandingGroup{Name: child.Name}
 		for _, e := range child.Standings.Entries {
-			s := Standing{Team: e.Team.toTeam()}
+			s := Standing{Team: e.Team.toTeam(), Zone: e.Note.Description}
+			if c := strings.TrimLeft(e.Note.Color, "#"); c != "" {
+				s.ZoneColor = "#" + c // bazen "##B5E7CE" geliyor
+			}
 			for _, st := range e.Stats {
 				v := int(st.Value)
 				switch st.Name {

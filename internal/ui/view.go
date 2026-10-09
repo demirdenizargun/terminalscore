@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/demirdenizargun/terminalscore/internal/espn"
@@ -351,9 +352,13 @@ func (m Model) standingsLines() []string {
 	lines := []string{
 		title,
 		"",
-		mutedStyle.Render(fmt.Sprintf("%3s  %-*s %3s %3s %3s %3s %4s %4s %4s %4s",
+		mutedStyle.Render(fmt.Sprintf(" %3s  %-*s %3s %3s %3s %3s %4s %4s %4s %4s",
 			"#", teamW, "Takım", "O", "G", "B", "M", "AG", "YG", "AV", "P")),
 	}
+
+	type zone struct{ desc, color string }
+	var zones []zone
+	seen := map[string]bool{}
 
 	favTeam := m.cfg.TeamID()
 	for gi, g := range groups {
@@ -373,8 +378,31 @@ func (m Model) standingsLines() []string {
 				row = favStyle.Render(row + "★")
 				points = favStyle.Render(fmt.Sprintf("%3d", s.Points))
 			}
-			lines = append(lines, row+points)
+			lines = append(lines, zoneBar(s.Zone, s.ZoneColor)+row+points)
+
+			if s.Zone != "" && !seen[zoneLabel(s.Zone)] {
+				seen[zoneLabel(s.Zone)] = true
+				zones = append(zones, zone{s.Zone, s.ZoneColor})
+			}
 		}
+	}
+
+	// lejant, satır başına sığdığı kadar
+	if len(zones) > 0 {
+		lines = append(lines, "")
+		const maxW = 66
+		line, w := "", 0
+		for _, z := range zones {
+			label := zoneLabel(z.desc)
+			itemW := lipgloss.Width(label) + 4
+			if w > 0 && w+itemW > maxW {
+				lines = append(lines, line)
+				line, w = "", 0
+			}
+			line += zoneBar(z.desc, z.color) + " " + mutedStyle.Render(label) + "  "
+			w += itemW
+		}
+		lines = append(lines, line)
 	}
 	return lines
 }

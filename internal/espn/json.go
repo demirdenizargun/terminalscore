@@ -81,7 +81,11 @@ type standingsJSON struct {
 		Name      string `json:"name"`
 		Standings struct {
 			Entries []struct {
-				Team  teamJSON `json:"team"`
+				Team teamJSON `json:"team"`
+				Note struct {
+					Color       string `json:"color"`
+					Description string `json:"description"`
+				} `json:"note"`
 				Stats []struct {
 					Name  string  `json:"name"`
 					Value float64 `json:"value"`
