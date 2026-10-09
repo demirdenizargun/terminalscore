@@ -156,22 +156,23 @@ func (m Model) setupView() string {
 	s := m.setup
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("Favori takımın hangisi?") + "\n")
-	b.WriteString(mutedStyle.Render("Favori takımının maçları ve ligi listede en üstte görünür.") + "\n\n")
-	b.WriteString("  Ara: " + s.query + selectedStyle.Render("█") + "\n\n")
+	tx := m.tx
+	b.WriteString(titleStyle.Render(tx.setupTitle) + "\n")
+	b.WriteString(mutedStyle.Render(tx.setupSubtitle) + "\n\n")
+	b.WriteString("  " + tx.setupSearch + s.query + selectedStyle.Render("█") + "\n\n")
 
 	switch {
 	case !s.loaded:
-		b.WriteString(mutedStyle.Render("  Takımlar yükleniyor..."))
+		b.WriteString(mutedStyle.Render("  " + tx.setupLoading))
 	case len(s.options) == 0:
-		b.WriteString(errorStyle.Render("  Takım listesi alınamadı, internet bağlantını kontrol et.") + "\n")
-		b.WriteString(mutedStyle.Render("  esc ile şimdilik atlayıp sonra f tuşuyla tekrar deneyebilirsin."))
+		b.WriteString(errorStyle.Render("  "+tx.setupNoTeams) + "\n")
+		b.WriteString(mutedStyle.Render("  " + tx.setupNoTeamsHint))
 	case strings.TrimSpace(s.query) == "":
-		b.WriteString(mutedStyle.Render("  Takım adını yazmaya başla (ör. galatasaray, besiktas, real madrid)"))
+		b.WriteString(mutedStyle.Render("  " + tx.setupHint))
 	default:
 		res := s.results()
 		if len(res) == 0 {
-			b.WriteString(mutedStyle.Render("  Eşleşen takım yok."))
+			b.WriteString(mutedStyle.Render("  " + tx.setupNoMatch))
 		}
 		for i, o := range res {
 			name := padRight(ansi.Truncate(o.team.Name, 25, "…"), 26)
@@ -180,7 +181,7 @@ func (m Model) setupView() string {
 			} else {
 				b.WriteString("  " + name)
 			}
-			b.WriteString(mutedStyle.Render(o.league.Name) + "\n")
+			b.WriteString(mutedStyle.Render(tx.league(o.league)) + "\n")
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")

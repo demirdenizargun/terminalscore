@@ -7,7 +7,7 @@ import (
 )
 
 // Sıra önemli: uzun ifadeler kısalarından önce gelmeli.
-var zoneReplacer = strings.NewReplacer(
+var zoneReplacerTR = strings.NewReplacer(
 	"Knockout phase playoffs - unseeded", "Play-off",
 	"Knockout phase playoffs - seeded", "Play-off (seri başı)",
 	"Qualifies for round of 16", "Son 16",
@@ -29,7 +29,15 @@ var zoneReplacer = strings.NewReplacer(
 	" qualifying", " ön eleme",
 )
 
-func zoneLabel(desc string) string { return zoneReplacer.Replace(desc) }
+// İngilizcede ESPN'in metni kalıyor, sadece uzunlar kısalıyor.
+var zoneReplacerEN = strings.NewReplacer(
+	"Knockout phase playoffs - unseeded", "Playoffs",
+	"Knockout phase playoffs - seeded", "Playoffs (seeded)",
+	"Qualifies for round of 16", "Round of 16",
+	"Qualifies for MLS Cup Playoffs - Round One Best-of-3 series", "MLS Cup playoffs",
+	"Qualifies for MLS Cup Playoffs - Wild Card Matches", "MLS Cup wild card",
+	"Relegated", "Relegation",
+)
 
 var (
 	zoneGreen  = lipgloss.Color("#3FB950")

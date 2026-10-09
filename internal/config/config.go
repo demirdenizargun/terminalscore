@@ -12,6 +12,7 @@ import (
 type Config struct {
 	SetupDone    bool          `json:"setup_done"` // favori takım soruldu (seçildi ya da atlandı)
 	FavoriteTeam *FavoriteTeam `json:"favorite_team,omitempty"`
+	Language     string        `json:"language,omitempty"` // "tr", "en"; boşsa sistem dili
 }
 
 type FavoriteTeam struct {

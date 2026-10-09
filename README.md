@@ -1,12 +1,14 @@
 # terminalscore
 
-Terminalde mackolik tarzı canlı skor. Günün bütün maçları, maç olayları ve puan durumları;
-veri ESPN'den geliyor, API anahtarı gerekmiyor.
+[Türkçe](README.tr.md)
 
-İlk açılışta favori takımını soruyor; o takımın maçı olan turnuva ve kendi ligi listenin
-en üstüne çıkıyor. Diğer ligler büyüklük sırasıyla geliyor.
+Live football scores in your terminal. Every match of the day, match events and league
+tables, from all over the world. Data comes from ESPN, no API key needed.
 
-## Kurulum
+On first launch it asks for your favorite team; the competition your team is playing in
+and its league go to the top of the list. Other leagues follow by size.
+
+## Install
 
 Linux / macOS:
 
@@ -14,7 +16,7 @@ Linux / macOS:
 curl -fsSL https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.sh | sh
 ```
 
-`~/.local/bin` altına kurar, sudo istemez.
+Installs to `~/.local/bin`, no sudo needed.
 
 Windows (PowerShell):
 
@@ -22,60 +24,65 @@ Windows (PowerShell):
 irm https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.ps1 | iex
 ```
 
-Debian/Ubuntu ve Fedora için `.deb` / `.rpm` paketleri, diğer sistemler için arşivler
-[releases](https://github.com/demirdenizargun/terminalscore/releases/latest) sayfasında:
+`.deb` / `.rpm` packages and archives for other systems are on the
+[releases](https://github.com/demirdenizargun/terminalscore/releases/latest) page:
 
 ```sh
 sudo apt install ./terminalscore_*_linux_amd64.deb
 sudo dnf install ./terminalscore_*_linux_amd64.rpm
 ```
 
-Go ile:
+With Go:
 
 ```sh
 go install github.com/demirdenizargun/terminalscore@latest
 ```
 
-## Kullanım
+## Usage
 
 ```
 terminalscore
 ```
 
-| Tuş | |
+| Key | |
 |---|---|
-| ← → | gün değiştir (puan durumunda lig) |
-| t | bugün |
-| ↑ ↓ | maç seç / kaydır |
-| PgUp PgDn | 10 maç atla |
-| enter | maç detayı |
-| esc | geri |
-| tab | maçlar / puan durumu |
-| f | favori takım |
-| r | yenile |
-| q | çıkış |
+| ← → | change day (league on the standings tab) |
+| t | today |
+| ↑ ↓ | select match / scroll |
+| PgUp PgDn | jump 10 matches |
+| enter | match details |
+| esc | back |
+| tab | matches / standings |
+| f | favorite team |
+| r | refresh |
+| q | quit |
 
-Canlı maç varken liste 10 saniyede, açık maç detayı 5 saniyede bir yenileniyor.
-Gol olan maç bir dakika boyunca GOL! diye yanıp sönüyor.
+While matches are live the list refreshes every 10 seconds and an open match every 5.
+A match with a new goal blinks GOAL! for a minute.
 
-Ayarlar `~/.config/terminalscore/config.json` (Windows'ta `%AppData%\terminalscore\config.json`)
-dosyasında. Silersen favori takım tekrar sorulur.
+The interface is in English or Turkish, picked from your system language. To override it,
+use `terminalscore --lang tr` or set `"language": "en"` in the config file:
+`~/.config/terminalscore/config.json` (`%AppData%\terminalscore\config.json` on Windows).
+Deleting that file makes it ask for your favorite team again.
 
-## Derleme
+## Building
 
 ```sh
 go build -o terminalscore .
 ```
 
-Sürüm çıkarmak için tag atmak yeterli, gerisini GitHub Actions + GoReleaser hallediyor:
+Releases are built by GitHub Actions + GoReleaser when a tag is pushed:
 
 ```sh
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-Yerelde denemek için `goreleaser release --snapshot --clean`.
+To try it locally: `goreleaser release --snapshot --clean`.
 
-## Lisans
+Adding a language means adding one `texts` value in `internal/ui/text.go` and league names
+in `internal/espn/leagues.go`.
 
-MIT. Maç verileri ESPN'e aittir; bu projenin ESPN ile bir bağlantısı yok. Kullanılan
-adresler resmi olarak belgelenmiş bir API değil, her an değişebilir.
+## License
+
+MIT. Match data belongs to ESPN; this project is not affiliated with ESPN. The endpoints
+used are not an officially documented API and may change at any time.

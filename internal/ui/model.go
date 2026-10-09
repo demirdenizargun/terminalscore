@@ -11,6 +11,7 @@ import (
 
 	"github.com/demirdenizargun/terminalscore/internal/config"
 	"github.com/demirdenizargun/terminalscore/internal/espn"
+	"github.com/demirdenizargun/terminalscore/internal/i18n"
 )
 
 // ESPN scoreboard'u 10 sn, summary'yi 1 sn cache'liyor; daha sık sormanın anlamı yok.
@@ -43,6 +44,7 @@ type Model struct {
 	client *espn.Client
 	loc    *time.Location
 	cfg    config.Config
+	tx     *texts
 
 	tab tab
 	day time.Time
@@ -70,12 +72,13 @@ type Model struct {
 	width, height int
 }
 
-func New(client *espn.Client, loc *time.Location, cfg config.Config) Model {
+func New(client *espn.Client, loc *time.Location, cfg config.Config, lang i18n.Lang) Model {
 	now := time.Now().In(loc)
 	m := Model{
 		client:    client,
 		loc:       loc,
 		cfg:       cfg,
+		tx:        textsFor(lang),
 		day:       time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc),
 		standings: map[string][]espn.StandingGroup{},
 		goals:     map[string]time.Time{},

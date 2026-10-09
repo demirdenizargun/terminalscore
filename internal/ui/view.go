@@ -27,17 +27,13 @@ func (m Model) View() string {
 	var body, help string
 	switch {
 	case m.setup != nil:
-		body = m.setupView()
-		help = "yaz: ara · ↑/↓ seç · enter kaydet · esc atla"
+		body, help = m.setupView(), m.tx.helpSetup
 	case m.detailID != "":
-		body = m.detailView()
-		help = "↑/↓ kaydır · esc geri · r yenile · q çıkış"
+		body, help = m.detailView(), m.tx.helpDetail
 	case m.tab == tabStandings:
-		body = m.standingsView()
-		help = "←/→ lig · ↑/↓ kaydır · tab maçlar · f favori takım · q çıkış"
+		body, help = m.standingsView(), m.tx.helpStandings
 	default:
-		body = m.matchesView()
-		help = "←/→ gün · t bugün · ↑/↓ seç · enter detay · tab puan durumu · f favori takım · q çıkış"
+		body, help = m.matchesView(), m.tx.helpMatches
 	}
 
 	var b strings.Builder
@@ -54,7 +50,7 @@ func (m Model) headerView() string {
 	if m.setup != nil {
 		return out
 	}
-	for i, name := range []string{"Maçlar", "Puan Durumu"} {
+	for i, name := range []string{m.tx.tabMatches, m.tx.tabStandings} {
 		if tab(i) == m.tab {
 			out += activeTabStyle.Render(name)
 		} else {
@@ -71,26 +67,26 @@ func (m Model) footerView(help string) string {
 	// hata yoksa da satır boş kalıyor, düzen kaymasın
 	var status string
 	if m.err != nil {
-		status = errorStyle.Render("Hata: " + m.err.Error())
+		status = errorStyle.Render(m.tx.errPrefix + m.err.Error())
 	}
 	return status + "\n" + mutedStyle.Render(help)
 }
 
 func (m Model) matchesView() string {
-	date := "◀  " + titleStyle.Render(turkishDate(m.day)) + "  ▶"
+	date := "◀  " + titleStyle.Render(m.tx.date(m.day)) + "  ▶"
 	if now := time.Now().In(m.loc); now.Year() == m.day.Year() && now.YearDay() == m.day.YearDay() {
-		date += liveStyle.Render("  Bugün")
+		date += liveStyle.Render("  " + m.tx.today)
 	}
 	if m.matchesLoaded && len(m.matches) > 0 {
-		date += mutedStyle.Render(fmt.Sprintf("  ·  %d maç", len(m.matches)))
+		date += mutedStyle.Render("  ·  " + fmt.Sprintf(m.tx.matchCount, len(m.matches)))
 	}
 	head := date + "\n\n"
 
 	switch {
 	case !m.matchesLoaded:
-		return head + mutedStyle.Render("  Yükleniyor...")
+		return head + mutedStyle.Render("  "+m.tx.loading)
 	case len(m.matches) == 0:
-		return head + mutedStyle.Render("  Bu tarihte maç yok. ←/→ ile başka güne geç.")
+		return head + mutedStyle.Render("  "+m.tx.noMatches)
 	}
 
 	var lines []string
@@ -101,7 +97,7 @@ func (m Model) matchesView() string {
 			if lastLeague != "\x00" {
 				lines = append(lines, "")
 			}
-			lines = append(lines, leagueStyle.Render(leagueTitle(mt)))
+			lines = append(lines, leagueStyle.Render(m.leagueTitle(mt)))
 			lastLeague = key
 		}
 		selected := mt.ID == m.selectedID
@@ -119,13 +115,6 @@ func (m Model) matchesView() string {
 	return head + m.window(lines, 0, start, 2)
 }
 
-func leagueTitle(mt espn.Match) string {
-	if mt.LeagueName != "" {
-		return mt.LeagueName
-	}
-	return "Diğer"
-}
-
 func (m Model) matchRow(mt espn.Match, selected bool) string {
 	marker := " "
 	if selected {
@@ -137,7 +126,7 @@ func (m Model) matchRow(mt espn.Match, selected bool) string {
 		star = favStyle.Render("★")
 	}
 
-	status := padRight(statusText(mt, m.loc), statusW)
+	status := padRight(m.statusText(mt), statusW)
 	switch mt.State {
 	case espn.Live:
 		status = liveStyle.Render(status)
@@ -166,7 +155,7 @@ func (m Model) matchRow(mt espn.Match, selected bool) string {
 	switch {
 	case m.recentGoal(mt.ID):
 		score = blink(score)
-		goal = " " + blink(" GOL! ")
+		goal = " " + blink(" "+m.tx.goal+" ")
 	case mt.State == espn.Live:
 		score = liveStyle.Render(score)
 	}
@@ -201,7 +190,7 @@ func (m Model) detailView() string {
 func (m Model) detailLines() []string {
 	mt, ok := m.selectedMatch()
 	if !ok {
-		return []string{mutedStyle.Render("Maç bulunamadı.")}
+		return []string{mutedStyle.Render(m.tx.matchNotFound)}
 	}
 
 	width := 2*sideW + minuteW
@@ -217,12 +206,12 @@ func (m Model) detailLines() []string {
 	case mt.State == espn.Live:
 		scoreCol = liveStyle.Render(center(score, minuteW))
 	}
-	info := statusLong(mt, m.loc)
+	info := m.statusLong(mt)
 	if mt.Venue != "" {
 		info += " · " + mt.Venue
 	}
 	lines = append(lines,
-		center(leagueStyle.Render(leagueTitle(mt)), width),
+		center(leagueStyle.Render(m.leagueTitle(mt)), width),
 		padLeft(titleStyle.Render(mt.Home.Name), sideW)+scoreCol+padRight(titleStyle.Render(mt.Away.Name), sideW),
 		center(mutedStyle.Render(info), width),
 		mutedStyle.Render(strings.Repeat("─", width)),
@@ -230,19 +219,19 @@ func (m Model) detailLines() []string {
 
 	switch {
 	case !m.eventsLoaded:
-		lines = append(lines, mutedStyle.Render("Yükleniyor..."))
+		lines = append(lines, mutedStyle.Render(m.tx.loading))
 	case len(m.events) == 0:
-		lines = append(lines, mutedStyle.Render("Henüz maç olayı yok."))
+		lines = append(lines, mutedStyle.Render(m.tx.noEvents))
 	}
 
 	for _, ev := range m.events {
-		if label, ok := periodLabels[ev.Label]; ok {
+		if label, ok := m.tx.periods[ev.Label]; ok {
 			if label != "" {
 				lines = append(lines, center(mutedStyle.Render("── "+label+" ──"), width))
 			}
 			continue
 		}
-		icon, texts := describeEvent(ev)
+		icon, texts := m.describeEvent(ev)
 		for i, text := range texts {
 			minute := ""
 			if i == 0 {
@@ -288,22 +277,8 @@ func (m Model) maxScroll(lines []string, fixed int) int {
 	return max(len(lines)-fixed-room, 0)
 }
 
-// takımsız olaylar; boş olanlar gösterilmiyor
-var periodLabels = map[string]string{
-	"Kickoff":          "Maç başladı",
-	"Halftime":         "Devre arası",
-	"Start 2nd Half":   "İkinci yarı",
-	"End Regular Time": "Normal süre bitti",
-	"Start Extra Time": "Uzatmalar",
-	"End Extra Time":   "Uzatmalar bitti",
-	"Penalty Shootout": "Penaltı atışları",
-	"Full Time":        "Maç sonu",
-	"Start Delay":      "",
-	"End Delay":        "",
-}
-
 // oyuncu değişikliği iki satır: giren, çıkan
-func describeEvent(ev espn.Event) (icon string, lines []string) {
+func (m Model) describeEvent(ev espn.Event) (icon string, lines []string) {
 	player := func(i int) string {
 		if i < len(ev.Players) {
 			return ev.Players[i]
@@ -314,14 +289,14 @@ func describeEvent(ev espn.Event) (icon string, lines []string) {
 	case espn.Goal:
 		text := player(0)
 		if ev.Penalty {
-			text += " (P)"
+			text += m.tx.penalty
 		}
 		if ev.OwnGoal {
-			text += " (K.K.)"
+			text += m.tx.ownGoal
 		}
 		return "⚽", []string{text}
 	case espn.PenaltyMissed:
-		return "✗", []string{player(0) + " (P kaçtı)"}
+		return "✗", []string{player(0) + m.tx.penMissed}
 	case espn.YellowCard:
 		return yellowCard, []string{player(0)}
 	case espn.RedCard:
@@ -338,22 +313,23 @@ func (m Model) standingsView() string {
 
 func (m Model) standingsLines() []string {
 	league := standingLeagues[m.standingsIdx]
-	title := "◀  " + leagueStyle.Render(league.Name) + "  ▶" +
+	title := "◀  " + leagueStyle.Render(m.tx.league(league)) + "  ▶" +
 		mutedStyle.Render(fmt.Sprintf("  (%d/%d)", m.standingsIdx+1, len(standingLeagues)))
 
 	groups, ok := m.standings[league.Slug]
 	if !ok {
 		if m.err != nil {
-			return []string{title, "", mutedStyle.Render("Puan durumu alınamadı.")}
+			return []string{title, "", mutedStyle.Render(m.tx.standingsFailed)}
 		}
-		return []string{title, "", mutedStyle.Render("Yükleniyor...")}
+		return []string{title, "", mutedStyle.Render(m.tx.loading)}
 	}
 
+	c := m.tx.cols
 	lines := []string{
 		title,
 		"",
 		mutedStyle.Render(fmt.Sprintf(" %3s  %-*s %3s %3s %3s %3s %4s %4s %4s %4s",
-			"#", teamW, "Takım", "O", "G", "B", "M", "AG", "YG", "AV", "P")),
+			c[0], teamW, c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9])),
 	}
 
 	type zone struct{ desc, color string }
@@ -380,8 +356,8 @@ func (m Model) standingsLines() []string {
 			}
 			lines = append(lines, zoneBar(s.Zone, s.ZoneColor)+row+points)
 
-			if s.Zone != "" && !seen[zoneLabel(s.Zone)] {
-				seen[zoneLabel(s.Zone)] = true
+			if s.Zone != "" && !seen[m.tx.zone(s.Zone)] {
+				seen[m.tx.zone(s.Zone)] = true
 				zones = append(zones, zone{s.Zone, s.ZoneColor})
 			}
 		}
@@ -393,7 +369,7 @@ func (m Model) standingsLines() []string {
 		const maxW = 66
 		line, w := "", 0
 		for _, z := range zones {
-			label := zoneLabel(z.desc)
+			label := m.tx.zone(z.desc)
 			itemW := lipgloss.Width(label) + 4
 			if w > 0 && w+itemW > maxW {
 				lines = append(lines, line)

@@ -42,7 +42,7 @@ type Team struct {
 type Match struct {
 	ID         string
 	LeagueID   string // ör. "3946"
-	LeagueName string
+	LeagueName string // ESPN'deki adı; bilinen ligler için League.NameTR/NameEN kullanılır
 	Kickoff    time.Time
 	Home, Away Team
 	HomeScore  string
@@ -124,9 +124,6 @@ func (c *Client) Matches(ctx context.Context, day time.Time) ([]Match, error) {
 			StatusName: e.Status.Type.Name,
 			Clock:      e.Status.DisplayClock,
 			Venue:      comp.Venue.FullName,
-		}
-		if l, ok := FindLeague(m.LeagueID); ok {
-			m.LeagueName = l.Name
 		}
 		for _, cp := range comp.Competitors {
 			team := cp.Team.toTeam()

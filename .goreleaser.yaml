@@ -24,6 +24,7 @@ archives:
     files:
       - LICENSE
       - README.md
+      - README.tr.md
 
 checksum:
   name_template: checksums.txt
@@ -33,7 +34,7 @@ nfpms:
     vendor: demirdenizargun
     homepage: https://github.com/demirdenizargun/terminalscore
     maintainer: demirdenizargun <demirdenizargun@users.noreply.github.com>
-    description: Terminalde canlı futbol takibi
+    description: Live football scores in your terminal
     license: MIT
     formats: [deb, rpm]
 
