@@ -1,5 +1,5 @@
 // Package espn, ESPN'in herkese açık (anahtarsız) futbol API'sinden
-// maç, maç olayı ve puan durumu verisini çeker.
+// maç, maç olayı, puan durumu ve takım verisini çeker.
 package espn
 
 import (
@@ -14,19 +14,15 @@ import (
 
 const baseURL = "https://site.api.espn.com/apis"
 
-// SuperLig, ESPN'deki Trendyol Süper Lig kodu.
-const SuperLig = "tur.1"
+// allLeagues, ESPN'de tüm liglerin maçlarını tek istekte döndüren yol.
+const allLeagues = "all"
 
 type Client struct {
-	http   *http.Client
-	league string
+	http *http.Client
 }
 
-func New(league string) *Client {
-	return &Client{
-		http:   &http.Client{Timeout: 15 * time.Second},
-		league: league,
-	}
+func New() *Client {
+	return &Client{http: &http.Client{Timeout: 20 * time.Second}}
 }
 
 // State, maçın genel durumu: başlamadı, oynanıyor, bitti.
@@ -47,6 +43,8 @@ type Team struct {
 
 type Match struct {
 	ID         string
+	LeagueID   string // ESPN lig kimliği, ör. "3946"
+	LeagueName string
 	Kickoff    time.Time
 	Home, Away Team
 	HomeScore  string
@@ -55,6 +53,11 @@ type Match struct {
 	StatusName string // ESPN durum kodu, ör. STATUS_HALFTIME
 	Clock      string // ör. "67'" veya "90'+4'"
 	Venue      string
+}
+
+// HasTeam, takımın bu maçta oynayıp oynamadığını söyler.
+func (m Match) HasTeam(teamID string) bool {
+	return teamID != "" && (m.Home.ID == teamID || m.Away.ID == teamID)
 }
 
 type EventKind int
@@ -93,10 +96,17 @@ type Standing struct {
 
 func (s Standing) GoalDiff() int { return s.GoalsFor - s.GoalsAgainst }
 
-// Matches, verilen gündeki lig maçlarını başlama saatine göre sıralı döndürür.
+// StandingGroup, puan durumunda bir tablo. Ligde tek tablo olur;
+// grup usulü turnuvalarda her grup ayrı tablodur.
+type StandingGroup struct {
+	Name string
+	Rows []Standing
+}
+
+// Matches, verilen gündeki bütün liglerin maçlarını döndürür.
 func (c *Client) Matches(ctx context.Context, day time.Time) ([]Match, error) {
-	url := fmt.Sprintf("%s/site/v2/sports/soccer/%s/scoreboard?dates=%s",
-		baseURL, c.league, day.Format("20060102"))
+	url := fmt.Sprintf("%s/site/v2/sports/soccer/%s/scoreboard?dates=%s&limit=1000",
+		baseURL, allLeagues, day.Format("20060102"))
 
 	var r scoreboardJSON
 	if err := c.get(ctx, url, &r); err != nil {
@@ -111,11 +121,16 @@ func (c *Client) Matches(ctx context.Context, day time.Time) ([]Match, error) {
 		comp := e.Competitions[0]
 		m := Match{
 			ID:         e.ID,
+			LeagueID:   leagueIDFromUID(e.UID),
+			LeagueName: comp.AltGameNote,
 			Kickoff:    parseTime(e.Date),
 			State:      State(e.Status.Type.State),
 			StatusName: e.Status.Type.Name,
 			Clock:      e.Status.DisplayClock,
 			Venue:      comp.Venue.FullName,
+		}
+		if l, ok := FindLeague(m.LeagueID); ok {
+			m.LeagueName = l.Name
 		}
 		for _, cp := range comp.Competitors {
 			team := cp.Team.toTeam()
@@ -127,17 +142,13 @@ func (c *Client) Matches(ctx context.Context, day time.Time) ([]Match, error) {
 		}
 		matches = append(matches, m)
 	}
-
-	sort.SliceStable(matches, func(i, j int) bool {
-		return matches[i].Kickoff.Before(matches[j].Kickoff)
-	})
 	return matches, nil
 }
 
 // Events, bir maçın önemli olaylarını (gol, kart, değişiklik) döndürür.
 func (c *Client) Events(ctx context.Context, matchID string) ([]Event, error) {
 	url := fmt.Sprintf("%s/site/v2/sports/soccer/%s/summary?event=%s",
-		baseURL, c.league, matchID)
+		baseURL, allLeagues, matchID)
 
 	var r summaryJSON
 	if err := c.get(ctx, url, &r); err != nil {
@@ -160,48 +171,70 @@ func (c *Client) Events(ctx context.Context, matchID string) ([]Event, error) {
 	return events, nil
 }
 
-// Standings, ligin güncel puan durumunu sıralı döndürür.
-func (c *Client) Standings(ctx context.Context) ([]Standing, error) {
-	url := fmt.Sprintf("%s/v2/sports/soccer/%s/standings", baseURL, c.league)
+// Standings, bir ligin (kısa koduyla, ör. "tur.1") puan durumunu döndürür.
+func (c *Client) Standings(ctx context.Context, leagueSlug string) ([]StandingGroup, error) {
+	url := fmt.Sprintf("%s/v2/sports/soccer/%s/standings", baseURL, leagueSlug)
 
 	var r standingsJSON
 	if err := c.get(ctx, url, &r); err != nil {
 		return nil, err
 	}
-	if len(r.Children) == 0 {
+
+	groups := make([]StandingGroup, 0, len(r.Children))
+	for _, child := range r.Children {
+		g := StandingGroup{Name: child.Name}
+		for _, e := range child.Standings.Entries {
+			s := Standing{Team: e.Team.toTeam()}
+			for _, st := range e.Stats {
+				v := int(st.Value)
+				switch st.Name {
+				case "rank":
+					s.Rank = v
+				case "gamesPlayed":
+					s.Played = v
+				case "wins":
+					s.Won = v
+				case "ties":
+					s.Drawn = v
+				case "losses":
+					s.Lost = v
+				case "pointsFor":
+					s.GoalsFor = v
+				case "pointsAgainst":
+					s.GoalsAgainst = v
+				case "points":
+					s.Points = v
+				}
+			}
+			g.Rows = append(g.Rows, s)
+		}
+		sort.SliceStable(g.Rows, func(i, j int) bool { return g.Rows[i].Rank < g.Rows[j].Rank })
+		groups = append(groups, g)
+	}
+	if len(groups) == 0 {
 		return nil, fmt.Errorf("puan durumu bulunamadı")
 	}
+	return groups, nil
+}
 
-	entries := r.Children[0].Standings.Entries
-	rows := make([]Standing, 0, len(entries))
-	for _, e := range entries {
-		s := Standing{Team: e.Team.toTeam()}
-		for _, st := range e.Stats {
-			v := int(st.Value)
-			switch st.Name {
-			case "rank":
-				s.Rank = v
-			case "gamesPlayed":
-				s.Played = v
-			case "wins":
-				s.Won = v
-			case "ties":
-				s.Drawn = v
-			case "losses":
-				s.Lost = v
-			case "pointsFor":
-				s.GoalsFor = v
-			case "pointsAgainst":
-				s.GoalsAgainst = v
-			case "points":
-				s.Points = v
-			}
-		}
-		rows = append(rows, s)
+// Teams, bir ligdeki takımları döndürür.
+func (c *Client) Teams(ctx context.Context, leagueSlug string) ([]Team, error) {
+	url := fmt.Sprintf("%s/site/v2/sports/soccer/%s/teams", baseURL, leagueSlug)
+
+	var r teamsJSON
+	if err := c.get(ctx, url, &r); err != nil {
+		return nil, err
 	}
 
-	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Rank < rows[j].Rank })
-	return rows, nil
+	var teams []Team
+	for _, s := range r.Sports {
+		for _, l := range s.Leagues {
+			for _, t := range l.Teams {
+				teams = append(teams, t.Team.toTeam())
+			}
+		}
+	}
+	return teams, nil
 }
 
 func (c *Client) get(ctx context.Context, url string, out any) error {
@@ -209,7 +242,7 @@ func (c *Client) get(ctx context.Context, url string, out any) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "terminalscore/0.1")
+	req.Header.Set("User-Agent", "terminalscore/0.2")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -221,6 +254,16 @@ func (c *Client) get(ctx context.Context, url string, out any) error {
 		return fmt.Errorf("ESPN %d hatası döndürdü", resp.StatusCode)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// Maç kimliği "s:600~l:3946~e:401879276" biçiminde; lig kimliği "l:" sonrası.
+func leagueIDFromUID(uid string) string {
+	for _, part := range strings.Split(uid, "~") {
+		if id, ok := strings.CutPrefix(part, "l:"); ok {
+			return id
+		}
+	}
+	return ""
 }
 
 func classify(t string) (kind EventKind, penalty, ownGoal bool) {

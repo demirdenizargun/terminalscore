@@ -12,24 +12,29 @@ import (
 
 const (
 	statusW = 7
-	teamW   = 20
+	teamW   = 22
 	scoreW  = 7
 	sideW   = 30 // maç detayında ev sahibi / deplasman olay sütunları
 	minuteW = 9
+
+	chromeLines = 6 // üst başlık + alt bilgi satırları
 )
 
 func (m Model) View() string {
 	var body, help string
 	switch {
+	case m.setup != nil:
+		body = m.setupView()
+		help = "yaz: ara · ↑/↓ seç · enter kaydet · esc atla"
 	case m.detailID != "":
 		body = m.detailView()
 		help = "↑/↓ kaydır · esc geri · r yenile · q çıkış"
 	case m.tab == tabStandings:
 		body = m.standingsView()
-		help = "tab maçlar · r yenile · q çıkış"
+		help = "←/→ lig · ↑/↓ kaydır · tab maçlar · f favori takım · q çıkış"
 	default:
 		body = m.matchesView()
-		help = "←/→ gün · t bugün · ↑/↓ seç · enter detay · tab puan durumu · q çıkış"
+		help = "←/→ gün · t bugün · ↑/↓ seç · enter detay · tab puan durumu · f favori takım · q çıkış"
 	}
 
 	var b strings.Builder
@@ -42,14 +47,19 @@ func (m Model) View() string {
 }
 
 func (m Model) headerView() string {
-	tabs := []string{"Maçlar", "Puan Durumu"}
 	out := logoStyle.Render("⚽ terminalscore") + " "
-	for i, name := range tabs {
+	if m.setup != nil {
+		return out
+	}
+	for i, name := range []string{"Maçlar", "Puan Durumu"} {
 		if tab(i) == m.tab {
 			out += activeTabStyle.Render(name)
 		} else {
 			out += tabStyle.Render(name)
 		}
+	}
+	if fav := m.cfg.FavoriteTeam; fav != nil {
+		out += "  " + favStyle.Render("★ "+fav.Name)
 	}
 	return out
 }
@@ -69,33 +79,65 @@ func (m Model) footerView(help string) string {
 }
 
 func (m Model) matchesView() string {
-	var b strings.Builder
-
 	date := "◀  " + titleStyle.Render(turkishDate(m.day)) + "  ▶"
 	if now := time.Now().In(m.loc); now.Year() == m.day.Year() && now.YearDay() == m.day.YearDay() {
 		date += liveStyle.Render("  Bugün")
 	}
-	b.WriteString(date + "\n\n")
-	b.WriteString(titleStyle.Render("Trendyol Süper Lig") + "\n")
+	if m.matchesLoaded && len(m.matches) > 0 {
+		date += mutedStyle.Render(fmt.Sprintf("  ·  %d maç", len(m.matches)))
+	}
+	head := date + "\n\n"
 
 	switch {
 	case !m.matchesLoaded:
-		b.WriteString(mutedStyle.Render("  Yükleniyor..."))
+		return head + mutedStyle.Render("  Yükleniyor...")
 	case len(m.matches) == 0:
-		b.WriteString(mutedStyle.Render("  Bu tarihte Süper Lig maçı yok. ←/→ ile başka güne geç."))
+		return head + mutedStyle.Render("  Bu tarihte maç yok. ←/→ ile başka güne geç.")
 	}
 
-	for i, mt := range m.matches {
-		b.WriteString(m.matchRow(mt, i == m.cursor))
-		b.WriteString("\n")
+	var lines []string
+	cursorLine := 0
+	lastLeague := "\x00"
+	for _, mt := range m.matches {
+		if key := mt.LeagueID + "|" + mt.LeagueName; key != lastLeague {
+			if lastLeague != "\x00" {
+				lines = append(lines, "")
+			}
+			lines = append(lines, leagueStyle.Render(leagueTitle(mt)))
+			lastLeague = key
+		}
+		selected := mt.ID == m.selectedID
+		if selected {
+			cursorLine = len(lines)
+		}
+		lines = append(lines, m.matchRow(mt, selected))
 	}
-	return strings.TrimRight(b.String(), "\n")
+
+	// İmleç ekranda kalsın diye listeyi imlecin etrafında kesiyoruz.
+	visible := m.height - chromeLines - 2
+	start := 0
+	if visible > 0 && len(lines) > visible {
+		start = min(max(cursorLine-visible/3, 0), len(lines)-visible)
+	}
+	return head + m.window(lines, 0, start, 2)
+}
+
+func leagueTitle(mt espn.Match) string {
+	if mt.LeagueName != "" {
+		return mt.LeagueName
+	}
+	return "Diğer"
 }
 
 func (m Model) matchRow(mt espn.Match, selected bool) string {
-	marker := "  "
+	marker := " "
 	if selected {
-		marker = selectedStyle.Render("▶ ")
+		marker = selectedStyle.Render("▶")
+	}
+	favTeam := m.cfg.TeamID()
+	star := " "
+	if mt.HasTeam(favTeam) {
+		star = favStyle.Render("★")
 	}
 
 	status := padRight(statusText(mt, m.loc), statusW)
@@ -106,7 +148,10 @@ func (m Model) matchRow(mt espn.Match, selected bool) string {
 		status = mutedStyle.Render(status)
 	}
 
-	home, away := mt.Home.Name, mt.Away.Name
+	homeName := ansi.Truncate(mt.Home.Name, teamW, "…")
+	awayName := ansi.Truncate(mt.Away.Name, teamW, "…")
+	home, away := homeName, awayName
+
 	score := "-"
 	if mt.State != espn.Scheduled {
 		score = mt.HomeScore + " - " + mt.AwayScore
@@ -123,11 +168,20 @@ func (m Model) matchRow(mt espn.Match, selected bool) string {
 	if mt.State == espn.Live {
 		score = liveStyle.Render(score)
 	}
-	if selected {
-		home, away = selectedStyle.Render(mt.Home.Name), selectedStyle.Render(mt.Away.Name)
+
+	switch {
+	case selected:
+		home, away = selectedStyle.Render(homeName), selectedStyle.Render(awayName)
+	case favTeam != "":
+		if mt.Home.ID == favTeam {
+			home = favStyle.Render(homeName)
+		}
+		if mt.Away.ID == favTeam {
+			away = favStyle.Render(awayName)
+		}
 	}
 
-	return marker + status + padLeft(home, teamW) + " " + score + " " + padRight(away, teamW)
+	return marker + star + status + padLeft(home, teamW) + " " + score + " " + padRight(away, teamW)
 }
 
 func (m Model) detailView() string {
@@ -136,6 +190,7 @@ func (m Model) detailView() string {
 		return mutedStyle.Render("Maç bulunamadı.")
 	}
 
+	width := 2*sideW + minuteW
 	var lines []string
 	score := "-"
 	if mt.State != espn.Scheduled {
@@ -145,14 +200,17 @@ func (m Model) detailView() string {
 	if mt.State == espn.Live {
 		scoreStyle = liveStyle
 	}
-	lines = append(lines,
-		padLeft(titleStyle.Render(mt.Home.Name), sideW)+scoreStyle.Render(center(score, minuteW))+padRight(titleStyle.Render(mt.Away.Name), sideW),
-		center(mutedStyle.Render(statusLong(mt, m.loc)), 2*sideW+minuteW),
-	)
+	info := statusLong(mt, m.loc)
 	if mt.Venue != "" {
-		lines = append(lines, center(mutedStyle.Render(mt.Venue), 2*sideW+minuteW))
+		info += " · " + mt.Venue
 	}
-	lines = append(lines, mutedStyle.Render(strings.Repeat("─", 2*sideW+minuteW)))
+	lines = append(lines,
+		center(leagueStyle.Render(leagueTitle(mt)), width),
+		padLeft(titleStyle.Render(mt.Home.Name), sideW)+scoreStyle.Render(center(score, minuteW))+padRight(titleStyle.Render(mt.Away.Name), sideW),
+		center(mutedStyle.Render(info), width),
+		mutedStyle.Render(strings.Repeat("─", width)),
+	)
+	const fixed = 4 // kaydırılırken sabit kalan üst kısım
 
 	switch {
 	case !m.eventsLoaded:
@@ -162,6 +220,13 @@ func (m Model) detailView() string {
 	}
 
 	for _, ev := range m.events {
+		// devre arası, maç sonu gibi ara başlıklar; boş karşılıklılar (gecikmeler) gizlenir
+		if label, ok := periodLabels[ev.Label]; ok {
+			if label != "" {
+				lines = append(lines, center(mutedStyle.Render("── "+label+" ──"), width))
+			}
+			continue
+		}
 		icon, texts := describeEvent(ev)
 		for i, text := range texts {
 			minute := ""
@@ -178,26 +243,43 @@ func (m Model) detailView() string {
 			case mt.Away.ID:
 				lines = append(lines, strings.Repeat(" ", sideW)+minuteCol+padRight(icon+" "+text, sideW))
 			default:
-				lines = append(lines, center(mutedStyle.Render(minute+" "+text), 2*sideW+minuteW))
+				lines = append(lines, center(mutedStyle.Render(minute+" "+text), width))
 			}
 		}
 	}
 
-	return m.scrolled(lines)
+	return m.window(lines, fixed, m.scroll, 0)
 }
 
-// scrolled, ekrana sığmayan satırları kaydırma konumuna göre keser.
-func (m Model) scrolled(lines []string) string {
-	const header = 4 // sabit tutulan skor bölümü
-	visible := m.height - 8
-	if visible <= header || len(lines) <= visible {
+// window, ekrana sığmayan satırlardan görünür kısmı seçer. İlk `fixed`
+// satır hep görünür, kalanı `offset` kadar kaydırılır. `extra`, gövdenin
+// üstüne eklenen başka satırların sayısıdır (ör. tarih satırı).
+func (m Model) window(lines []string, fixed, offset, extra int) string {
+	visible := m.height - chromeLines - extra
+	if m.height == 0 || visible <= fixed || len(lines) <= visible {
 		return strings.Join(lines, "\n")
 	}
-	rest := lines[header:]
-	room := visible - header
-	start := min(m.scroll, max(len(rest)-room, 0))
+	rest := lines[fixed:]
+	room := visible - fixed
+	start := min(max(offset, 0), max(len(rest)-room, 0))
 	end := min(start+room, len(rest))
-	return strings.Join(append(lines[:header:header], rest[start:end]...), "\n")
+	out := append(append([]string{}, lines[:fixed]...), rest[start:end]...)
+	return strings.Join(out, "\n")
+}
+
+// periodLabels, ESPN'in takımsız olaylarının Türkçe karşılıkları.
+// Boş karşılık, olayın gösterilmeyeceği anlamına gelir.
+var periodLabels = map[string]string{
+	"Kickoff":          "Maç başladı",
+	"Halftime":         "Devre arası",
+	"Start 2nd Half":   "İkinci yarı",
+	"End Regular Time": "Normal süre bitti",
+	"Start Extra Time": "Uzatmalar",
+	"End Extra Time":   "Uzatmalar bitti",
+	"Penalty Shootout": "Penaltı atışları",
+	"Full Time":        "Maç sonu",
+	"Start Delay":      "",
+	"End Delay":        "",
 }
 
 // describeEvent, olayın ikonunu ve satır(lar)ını döndürür.
@@ -232,25 +314,48 @@ func describeEvent(ev espn.Event) (icon string, lines []string) {
 }
 
 func (m Model) standingsView() string {
-	if len(m.standings) == 0 {
+	league := standingLeagues[m.standingsIdx]
+	title := "◀  " + leagueStyle.Render(league.Name) + "  ▶" +
+		mutedStyle.Render(fmt.Sprintf("  (%d/%d)", m.standingsIdx+1, len(standingLeagues)))
+
+	groups, ok := m.standings[league.Slug]
+	if !ok {
 		if m.err != nil {
-			return mutedStyle.Render("Puan durumu alınamadı.")
+			return title + "\n\n" + mutedStyle.Render("Puan durumu alınamadı.")
 		}
-		return mutedStyle.Render("Yükleniyor...")
+		return title + "\n\n" + mutedStyle.Render("Yükleniyor...")
 	}
 
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("Trendyol Süper Lig · Puan Durumu") + "\n\n")
-	b.WriteString(mutedStyle.Render(fmt.Sprintf("%3s  %-*s %3s %3s %3s %3s %4s %4s %4s %4s",
-		"#", teamW, "Takım", "O", "G", "B", "M", "AG", "YG", "AV", "P")) + "\n")
-
-	for _, s := range m.standings {
-		row := fmt.Sprintf("%3d  %s %3d %3d %3d %3d %4d %4d %+4d ",
-			s.Rank, padRight(s.Team.Name, teamW), s.Played, s.Won, s.Drawn, s.Lost,
-			s.GoalsFor, s.GoalsAgainst, s.GoalDiff())
-		b.WriteString(row + titleStyle.Render(fmt.Sprintf("%4d", s.Points)) + "\n")
+	lines := []string{
+		title,
+		"",
+		mutedStyle.Render(fmt.Sprintf("%3s  %-*s %3s %3s %3s %3s %4s %4s %4s %4s",
+			"#", teamW, "Takım", "O", "G", "B", "M", "AG", "YG", "AV", "P")),
 	}
-	return strings.TrimRight(b.String(), "\n")
+	const fixed = 3
+
+	favTeam := m.cfg.TeamID()
+	for gi, g := range groups {
+		if len(groups) > 1 {
+			if gi > 0 {
+				lines = append(lines, "")
+			}
+			lines = append(lines, titleStyle.Render(g.Name))
+		}
+		for _, s := range g.Rows {
+			name := padRight(ansi.Truncate(s.Team.Name, teamW, "…"), teamW)
+			row := fmt.Sprintf("%3d  %s %3d %3d %3d %3d %4d %4d %+4d ",
+				s.Rank, name, s.Played, s.Won, s.Drawn, s.Lost,
+				s.GoalsFor, s.GoalsAgainst, s.GoalDiff())
+			points := titleStyle.Render(fmt.Sprintf("%4d", s.Points))
+			if s.Team.ID == favTeam {
+				row = favStyle.Render(row + "★")
+				points = favStyle.Render(fmt.Sprintf("%3d", s.Points))
+			}
+			lines = append(lines, row+points)
+		}
+	}
+	return m.window(lines, fixed, m.scroll, 0)
 }
 
 // compareScores: ev sahibi önde 1, deplasman önde -1, eşit/bilinmiyor 0.

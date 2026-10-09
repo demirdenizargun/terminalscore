@@ -24,6 +24,7 @@ func (t teamJSON) toTeam() Team {
 type scoreboardJSON struct {
 	Events []struct {
 		ID     string `json:"id"`
+		UID    string `json:"uid"`
 		Date   string `json:"date"`
 		Status struct {
 			DisplayClock string `json:"displayClock"`
@@ -33,7 +34,8 @@ type scoreboardJSON struct {
 			} `json:"type"`
 		} `json:"status"`
 		Competitions []struct {
-			Venue struct {
+			AltGameNote string `json:"altGameNote"` // lig adı, ör. "English Premier League"
+			Venue       struct {
 				FullName string `json:"fullName"`
 			} `json:"venue"`
 			Competitors []struct {
@@ -65,8 +67,19 @@ type summaryJSON struct {
 	} `json:"keyEvents"`
 }
 
+type teamsJSON struct {
+	Sports []struct {
+		Leagues []struct {
+			Teams []struct {
+				Team teamJSON `json:"team"`
+			} `json:"teams"`
+		} `json:"leagues"`
+	} `json:"sports"`
+}
+
 type standingsJSON struct {
 	Children []struct {
+		Name      string `json:"name"`
 		Standings struct {
 			Entries []struct {
 				Team  teamJSON `json:"team"`
