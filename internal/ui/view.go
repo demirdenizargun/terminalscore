@@ -65,20 +65,11 @@ func (m Model) headerView() string {
 }
 
 func (m Model) footerView(help string) string {
+	// Durum satırı yalnızca hata olduğunda dolar; yoksa boş kalır ki
+	// ekran düzeni kaymasın.
 	var status string
-	switch {
-	case m.err != nil:
+	if m.err != nil {
 		status = errorStyle.Render("Hata: " + m.err.Error())
-	case !m.updated.IsZero():
-		ago := int(time.Since(m.updated).Seconds())
-		status = mutedStyle.Render(fmt.Sprintf("Son güncelleme %d sn önce", ago))
-		if m.hasActiveMatch() {
-			every := matchesRefresh
-			if m.detailID != "" {
-				every = eventsRefresh
-			}
-			status += liveStyle.Render(fmt.Sprintf(" · canlı: %d sn'de bir yenileniyor", int(every.Seconds())))
-		}
 	}
 	return status + "\n" + mutedStyle.Render(help)
 }
