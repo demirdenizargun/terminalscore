@@ -1,0 +1,10 @@
+# Derlenen dosyalar (go build ile yeniden üretilir)
+terminalscore
+terminalscore.exe
+terminalscore-*
+
+# Editör / sistem dosyaları
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
