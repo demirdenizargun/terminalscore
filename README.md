@@ -35,7 +35,9 @@ $env:GOOS = "linux"; $env:GOARCH = "amd64"; go build -o terminalscore-linux-amd6
 | r | Yenile |
 | q | Çıkış |
 
-Canlı maç varken skorlar 30 saniyede bir otomatik yenilenir.
+Canlı maç varken maç listesi 10 saniyede, açık maç detayı 5 saniyede bir yenilenir
+(ESPN verisi sunucuda bu sürelerde güncelleniyor). Gol olan maç bir dakika boyunca
+yanıp sönen **GOL!** etiketiyle işaretlenir.
 
 ## Ayarlar
 

@@ -8,6 +8,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -17,7 +18,15 @@ import (
 	"terminalscore/internal/espn"
 )
 
-const refreshEvery = 30 * time.Second
+// Yenileme aralıkları ESPN'in önbellek sürelerine göre seçildi: maç listesi
+// sunucuda 10 sn, maç detayı 1 sn önbellekte tutuluyor. Daha sık sormak
+// aynı veriyi tekrar indirmek olur.
+const (
+	matchesRefresh   = 10 * time.Second
+	eventsRefresh    = 5 * time.Second
+	standingsRefresh = time.Minute
+	goalFlashFor     = time.Minute // gol olan maç bu süre boyunca "GOL!" ile işaretlenir
+)
 
 // standingLeagues, puan durumu sekmesinde ←/→ ile gezilen ligler.
 var standingLeagues = func() []espn.League {
@@ -60,6 +69,11 @@ type Model struct {
 
 	setup *setupModel // nil değilse favori takım seçme ekranı açık
 
+	goals map[string]time.Time // maç kimliği → son golün görüldüğü an
+
+	// son istek zamanları; saniyelik tick bunlara bakıp yenileme kararı verir
+	matchesAsked, eventsAsked, standingsAsked time.Time
+
 	err           error
 	updated       time.Time
 	width, height int
@@ -73,6 +87,7 @@ func New(client *espn.Client, loc *time.Location, cfg config.Config) Model {
 		cfg:       cfg,
 		day:       time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc),
 		standings: map[string][]espn.StandingGroup{},
+		goals:     map[string]time.Time{},
 	}
 	m.standingsIdx = m.defaultStandingsIdx()
 	if !cfg.SetupDone {
@@ -132,6 +147,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.err = msg.err
 		if msg.err == nil {
+			m.detectGoals(msg.matches)
 			m.matches = msg.matches
 			m.matchesLoaded = true
 			m.updated = time.Now()
@@ -155,19 +171,62 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tickMsg:
+		// Her saniye çalışır: ekran yeniden çizilir ("x sn önce" sayacı, GOL!
+		// yanıp sönmesi) ve süresi dolan veriler yeniden istenir.
+		now := time.Time(msg)
 		cmds := []tea.Cmd{tick()}
 		if m.hasActiveMatch() {
-			cmds = append(cmds, m.fetchMatches())
-			if m.tab == tabStandings {
+			if now.Sub(m.matchesAsked) >= matchesRefresh {
+				m.matchesAsked = now
+				cmds = append(cmds, m.fetchMatches())
+			}
+			if m.tab == tabStandings && now.Sub(m.standingsAsked) >= standingsRefresh {
+				m.standingsAsked = now
 				cmds = append(cmds, m.fetchStandings())
 			}
-			if m.detailID != "" {
-				cmds = append(cmds, m.fetchEvents())
-			}
+		}
+		if mt, ok := m.selectedMatch(); ok && m.detailID != "" && mt.State == espn.Live &&
+			now.Sub(m.eventsAsked) >= eventsRefresh {
+			m.eventsAsked = now
+			cmds = append(cmds, m.fetchEvents())
 		}
 		return m, tea.Batch(cmds...)
 	}
 	return m, nil
+}
+
+// detectGoals, yeni gelen skorları eskileriyle karşılaştırır; skoru artan
+// maçları "gol oldu" diye işaretler.
+func (m *Model) detectGoals(fresh []espn.Match) {
+	old := make(map[string]espn.Match, len(m.matches))
+	for _, mt := range m.matches {
+		old[mt.ID] = mt
+	}
+	now := time.Now()
+	for _, mt := range fresh {
+		prev, ok := old[mt.ID]
+		if !ok {
+			continue
+		}
+		if scoreValue(mt.HomeScore) > scoreValue(prev.HomeScore) ||
+			scoreValue(mt.AwayScore) > scoreValue(prev.AwayScore) {
+			m.goals[mt.ID] = now
+		}
+	}
+}
+
+// recentGoal, maçta son bir dakika içinde gol olup olmadığını söyler.
+func (m Model) recentGoal(matchID string) bool {
+	t, ok := m.goals[matchID]
+	return ok && time.Since(t) < goalFlashFor
+}
+
+func scoreValue(s string) int {
+	var v int
+	if _, err := fmt.Sscan(s, &v); err != nil {
+		return -1
+	}
+	return v
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -235,6 +294,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.events = nil
 			m.eventsLoaded = false
 			m.scroll = 0
+			m.eventsAsked = time.Now()
 			return m, m.fetchEvents()
 		}
 	}
@@ -414,7 +474,7 @@ func (m Model) selectedMatch() (espn.Match, bool) {
 }
 
 func tick() tea.Cmd {
-	return tea.Tick(refreshEvery, func(t time.Time) tea.Msg { return tickMsg(t) })
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
 func (m Model) fetchMatches() tea.Cmd {

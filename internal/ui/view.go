@@ -70,9 +70,14 @@ func (m Model) footerView(help string) string {
 	case m.err != nil:
 		status = errorStyle.Render("Hata: " + m.err.Error())
 	case !m.updated.IsZero():
-		status = mutedStyle.Render("Son güncelleme " + m.updated.In(m.loc).Format("15:04:05"))
+		ago := int(time.Since(m.updated).Seconds())
+		status = mutedStyle.Render(fmt.Sprintf("Son güncelleme %d sn önce", ago))
 		if m.hasActiveMatch() {
-			status += liveStyle.Render(" · canlı takip açık")
+			every := matchesRefresh
+			if m.detailID != "" {
+				every = eventsRefresh
+			}
+			status += liveStyle.Render(fmt.Sprintf(" · canlı: %d sn'de bir yenileniyor", int(every.Seconds())))
 		}
 	}
 	return status + "\n" + mutedStyle.Render(help)
@@ -165,7 +170,12 @@ func (m Model) matchRow(mt espn.Match, selected bool) string {
 		}
 	}
 	score = center(score, scoreW)
-	if mt.State == espn.Live {
+	goal := ""
+	switch {
+	case m.recentGoal(mt.ID):
+		score = blink(score)
+		goal = " " + blink(" GOL! ")
+	case mt.State == espn.Live:
 		score = liveStyle.Render(score)
 	}
 
@@ -181,7 +191,16 @@ func (m Model) matchRow(mt espn.Match, selected bool) string {
 		}
 	}
 
-	return marker + star + status + padLeft(home, teamW) + " " + score + " " + padRight(away, teamW)
+	return marker + star + status + padLeft(home, teamW) + " " + score + " " + padRight(away, teamW) + goal
+}
+
+// blink, saniyede bir zemin rengi değiştirerek yanıp sönme etkisi verir
+// (ekran her saniye yeniden çizildiği için).
+func blink(s string) string {
+	if time.Now().Second()%2 == 0 {
+		return goalStyle.Render(s)
+	}
+	return goalDimStyle.Render(s)
 }
 
 func (m Model) detailView() string {
@@ -196,9 +215,12 @@ func (m Model) detailView() string {
 	if mt.State != espn.Scheduled {
 		score = mt.HomeScore + " - " + mt.AwayScore
 	}
-	scoreStyle := titleStyle
-	if mt.State == espn.Live {
-		scoreStyle = liveStyle
+	scoreCol := titleStyle.Render(center(score, minuteW))
+	switch {
+	case m.recentGoal(mt.ID):
+		scoreCol = blink(center(score, minuteW))
+	case mt.State == espn.Live:
+		scoreCol = liveStyle.Render(center(score, minuteW))
 	}
 	info := statusLong(mt, m.loc)
 	if mt.Venue != "" {
@@ -206,7 +228,7 @@ func (m Model) detailView() string {
 	}
 	lines = append(lines,
 		center(leagueStyle.Render(leagueTitle(mt)), width),
-		padLeft(titleStyle.Render(mt.Home.Name), sideW)+scoreStyle.Render(center(score, minuteW))+padRight(titleStyle.Render(mt.Away.Name), sideW),
+		padLeft(titleStyle.Render(mt.Home.Name), sideW)+scoreCol+padRight(titleStyle.Render(mt.Away.Name), sideW),
 		center(mutedStyle.Render(info), width),
 		mutedStyle.Render(strings.Repeat("─", width)),
 	)
@@ -360,14 +382,10 @@ func (m Model) standingsView() string {
 
 // compareScores: ev sahibi önde 1, deplasman önde -1, eşit/bilinmiyor 0.
 func compareScores(home, away string) int {
-	var h, a int
-	if _, err := fmt.Sscan(home, &h); err != nil {
-		return 0
-	}
-	if _, err := fmt.Sscan(away, &a); err != nil {
-		return 0
-	}
+	h, a := scoreValue(home), scoreValue(away)
 	switch {
+	case h < 0 || a < 0:
+		return 0
 	case h > a:
 		return 1
 	case h < a:

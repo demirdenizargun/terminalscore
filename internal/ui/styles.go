@@ -19,6 +19,8 @@ var (
 	winnerStyle   = lipgloss.NewStyle().Bold(true)
 	errorStyle    = lipgloss.NewStyle().Foreground(red)
 	favStyle      = lipgloss.NewStyle().Bold(true).Foreground(yellow)
+	goalStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#000000")).Background(green)
+	goalDimStyle  = lipgloss.NewStyle().Bold(true).Foreground(green)
 	leagueStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#58A6FF"))
 
 	yellowCard = lipgloss.NewStyle().Foreground(yellow).Render("▮")
