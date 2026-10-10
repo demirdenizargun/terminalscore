@@ -16,7 +16,8 @@ Linux / macOS:
 curl -fsSL https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.sh | sh
 ```
 
-Installs to `~/.local/bin`, no sudo needed.
+Installs to `~/.local/bin` (or `/usr/local/bin` when run as root), no sudo needed.
+The download is verified against the release checksums.
 
 Windows (PowerShell):
 

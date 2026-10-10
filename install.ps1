@@ -1,6 +1,6 @@
 #   irm https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.ps1 | iex
 #
-# %LOCALAPPDATA%\Programs\terminalscore altına kurar, kullanıcı PATH'ine ekler.
+# Installs to %LOCALAPPDATA%\Programs\terminalscore and adds it to the user PATH.
 
 $ErrorActionPreference = 'Stop'
 $repo = 'demirdenizargun/terminalscore'
@@ -13,7 +13,7 @@ function Install-TerminalScore {
         try {
             $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest"
         } catch {
-            throw 'En son sürüm bulunamadı (henüz sürüm yayınlanmamış olabilir).'
+            throw "Couldn't find the latest release."
         }
         $version = $release.tag_name
     }
@@ -27,29 +27,29 @@ function Install-TerminalScore {
     New-Item -ItemType Directory -Path $tmp | Out-Null
 
     try {
-        Write-Host "terminalscore $version indiriliyor (windows/$arch)..."
+        Write-Host "Downloading terminalscore $version (windows/$arch)..."
         Invoke-WebRequest "$base/$archive" -OutFile (Join-Path $tmp $archive) -UseBasicParsing
         Invoke-WebRequest "$base/checksums.txt" -OutFile (Join-Path $tmp 'checksums.txt') -UseBasicParsing
 
         $line = Get-Content (Join-Path $tmp 'checksums.txt') | Where-Object { $_ -match " $([regex]::Escape($archive))$" }
-        if (-not $line) { throw "$archive için sağlama bilgisi yok." }
+        if (-not $line) { throw "No checksum for $archive." }
         $expected = ($line -split ' ')[0]
         $actual = (Get-FileHash (Join-Path $tmp $archive) -Algorithm SHA256).Hash.ToLower()
-        if ($actual -ne $expected) { throw 'İndirilen dosya bozuk (sağlama tutmadı).' }
+        if ($actual -ne $expected) { throw 'Checksum mismatch, the download is corrupted.' }
 
         $installDir = Join-Path $env:LOCALAPPDATA 'Programs\terminalscore'
         New-Item -ItemType Directory -Force -Path $installDir | Out-Null
         Expand-Archive (Join-Path $tmp $archive) -DestinationPath $tmp -Force
         Copy-Item (Join-Path $tmp 'terminalscore.exe') $installDir -Force
-        Write-Host "Kuruldu: $installDir\terminalscore.exe"
+        Write-Host "Installed: $installDir\terminalscore.exe"
 
         $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
         if (-not $userPath) { $userPath = '' }
         if (-not (($userPath -split ';') -contains $installDir)) {
             [Environment]::SetEnvironmentVariable('Path', (($userPath.TrimEnd(';') + ';' + $installDir).TrimStart(';')), 'User')
-            Write-Host 'Klasör PATH''e eklendi. Yeni bir terminal açıp şunu yaz: terminalscore'
+            Write-Host 'Added to PATH. Open a new terminal and run: terminalscore'
         } else {
-            Write-Host 'Başlatmak için: terminalscore'
+            Write-Host 'Run it with: terminalscore'
         }
     } finally {
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue

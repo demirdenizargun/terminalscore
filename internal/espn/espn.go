@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	neturl "net/url"
 	"sort"
 	"strings"
 	"time"
@@ -116,14 +118,14 @@ func (c *Client) Matches(ctx context.Context, day time.Time) ([]Match, error) {
 		}
 		comp := e.Competitions[0]
 		m := Match{
-			ID:         e.ID,
-			LeagueID:   leagueIDFromUID(e.UID),
-			LeagueName: leagueName(comp.AltGameNote),
-			Kickoff:    parseTime(e.Date),
+			ID:         string(e.ID),
+			LeagueID:   leagueIDFromUID(string(e.UID)),
+			LeagueName: leagueName(string(comp.AltGameNote)),
+			Kickoff:    parseTime(string(e.Date)),
 			State:      State(e.Status.Type.State),
-			StatusName: e.Status.Type.Name,
-			Clock:      e.Status.DisplayClock,
-			Venue:      comp.Venue.FullName,
+			StatusName: string(e.Status.Type.Name),
+			Clock:      string(e.Status.DisplayClock),
+			Venue:      string(comp.Venue.FullName),
 		}
 		for _, cp := range comp.Competitors {
 			team := cp.Team.toTeam()
@@ -140,7 +142,7 @@ func (c *Client) Matches(ctx context.Context, day time.Time) ([]Match, error) {
 
 func (c *Client) Events(ctx context.Context, matchID string) ([]Event, error) {
 	url := fmt.Sprintf("%s/site/v2/sports/soccer/%s/summary?event=%s",
-		baseURL, allLeagues, matchID)
+		baseURL, allLeagues, neturl.QueryEscape(matchID))
 
 	var r summaryJSON
 	if err := c.get(ctx, url, &r); err != nil {
@@ -150,13 +152,13 @@ func (c *Client) Events(ctx context.Context, matchID string) ([]Event, error) {
 	events := make([]Event, 0, len(r.KeyEvents))
 	for _, ke := range r.KeyEvents {
 		ev := Event{
-			Minute: ke.Clock.DisplayValue,
-			Label:  ke.Type.Text,
-			TeamID: ke.Team.ID,
+			Minute: string(ke.Clock.DisplayValue),
+			Label:  string(ke.Type.Text),
+			TeamID: string(ke.Team.ID),
 		}
-		ev.Kind, ev.Penalty, ev.OwnGoal = classify(ke.Type.Type)
+		ev.Kind, ev.Penalty, ev.OwnGoal = classify(string(ke.Type.Type))
 		for _, p := range ke.Participants {
-			ev.Players = append(ev.Players, p.Athlete.DisplayName)
+			ev.Players = append(ev.Players, string(p.Athlete.DisplayName))
 		}
 		events = append(events, ev)
 	}
@@ -173,10 +175,10 @@ func (c *Client) Standings(ctx context.Context, leagueSlug string) ([]StandingGr
 
 	groups := make([]StandingGroup, 0, len(r.Children))
 	for _, child := range r.Children {
-		g := StandingGroup{Name: child.Name}
+		g := StandingGroup{Name: string(child.Name)}
 		for _, e := range child.Standings.Entries {
-			s := Standing{Team: e.Team.toTeam(), Zone: e.Note.Description}
-			if c := strings.TrimLeft(e.Note.Color, "#"); c != "" {
+			s := Standing{Team: e.Team.toTeam(), Zone: string(e.Note.Description)}
+			if c := strings.TrimLeft(string(e.Note.Color), "#"); isHexColor(c) {
 				s.ZoneColor = "#" + c // bazen "##B5E7CE" geliyor
 			}
 			for _, st := range e.Stats {
@@ -246,7 +248,22 @@ func (c *Client) get(ctx context.Context, url string, out any) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("ESPN %d hatası döndürdü", resp.StatusCode)
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	// en büyük cevap (bütün günün maçları) ~1 MB
+	return json.NewDecoder(io.LimitReader(resp.Body, maxResponse)).Decode(out)
+}
+
+const maxResponse = 32 << 20
+
+func isHexColor(s string) bool {
+	if len(s) != 6 {
+		return false
+	}
+	for _, r := range s {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return false
+		}
+	}
+	return true
 }
 
 // "s:600~l:3946~e:401879276" -> "3946"

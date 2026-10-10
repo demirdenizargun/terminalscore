@@ -16,7 +16,8 @@ Linux / macOS:
 curl -fsSL https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.sh | sh
 ```
 
-`~/.local/bin` altına kurar, sudo istemez.
+`~/.local/bin` altına (root olarak çalıştırılırsa `/usr/local/bin`) kurar, sudo istemez.
+İndirilen dosya sürümdeki sağlama değerleriyle doğrulanır.
 
 Windows (PowerShell):
 

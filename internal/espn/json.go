@@ -1,46 +1,51 @@
 package espn
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
-// ESPN cevaplarının sadece kullandığımız alanları.
+// ESPN cevaplarının sadece kullandığımız alanları. Metin alanları `text`
+// tipinde: okunurken kontrol karakterleri atılıyor, terminale kaçış kodu
+// gidemesin.
 
 type teamJSON struct {
-	ID               string `json:"id"`
-	DisplayName      string `json:"displayName"`
-	ShortDisplayName string `json:"shortDisplayName"`
-	Abbreviation     string `json:"abbreviation"`
+	ID               text `json:"id"`
+	DisplayName      text `json:"displayName"`
+	ShortDisplayName text `json:"shortDisplayName"`
+	Abbreviation     text `json:"abbreviation"`
 }
 
 func (t teamJSON) toTeam() Team {
 	return Team{
-		ID:    t.ID,
-		Name:  TurkishName(t.DisplayName),
-		Short: TurkishName(t.ShortDisplayName),
-		Abbr:  t.Abbreviation,
+		ID:    string(t.ID),
+		Name:  TurkishName(string(t.DisplayName)),
+		Short: TurkishName(string(t.ShortDisplayName)),
+		Abbr:  string(t.Abbreviation),
 	}
 }
 
 type scoreboardJSON struct {
 	Events []struct {
-		ID     string `json:"id"`
-		UID    string `json:"uid"`
-		Date   string `json:"date"`
+		ID     text `json:"id"`
+		UID    text `json:"uid"`
+		Date   text `json:"date"`
 		Status struct {
-			DisplayClock string `json:"displayClock"`
+			DisplayClock text `json:"displayClock"`
 			Type         struct {
-				Name  string `json:"name"`
-				State string `json:"state"`
+				Name  text `json:"name"`
+				State text `json:"state"`
 			} `json:"type"`
 		} `json:"status"`
 		Competitions []struct {
-			AltGameNote string `json:"altGameNote"` // lig adı, ör. "English Premier League"
+			AltGameNote text `json:"altGameNote"` // lig adı, ör. "English Premier League"
 			Venue       struct {
-				FullName string `json:"fullName"`
+				FullName text `json:"fullName"`
 			} `json:"venue"`
 			Competitors []struct {
-				HomeAway string     `json:"homeAway"`
-				Score    flexString `json:"score"`
-				Team     teamJSON   `json:"team"`
+				HomeAway text     `json:"homeAway"`
+				Score    text     `json:"score"`
+				Team     teamJSON `json:"team"`
 			} `json:"competitors"`
 		} `json:"competitions"`
 	} `json:"events"`
@@ -49,18 +54,18 @@ type scoreboardJSON struct {
 type summaryJSON struct {
 	KeyEvents []struct {
 		Type struct {
-			Text string `json:"text"`
-			Type string `json:"type"`
+			Text text `json:"text"`
+			Type text `json:"type"`
 		} `json:"type"`
 		Clock struct {
-			DisplayValue string `json:"displayValue"`
+			DisplayValue text `json:"displayValue"`
 		} `json:"clock"`
 		Team struct {
-			ID string `json:"id"`
+			ID text `json:"id"`
 		} `json:"team"`
 		Participants []struct {
 			Athlete struct {
-				DisplayName string `json:"displayName"`
+				DisplayName text `json:"displayName"`
 			} `json:"athlete"`
 		} `json:"participants"`
 	} `json:"keyEvents"`
@@ -78,16 +83,16 @@ type teamsJSON struct {
 
 type standingsJSON struct {
 	Children []struct {
-		Name      string `json:"name"`
+		Name      text `json:"name"`
 		Standings struct {
 			Entries []struct {
 				Team teamJSON `json:"team"`
 				Note struct {
-					Color       string `json:"color"`
-					Description string `json:"description"`
+					Color       text `json:"color"`
+					Description text `json:"description"`
 				} `json:"note"`
 				Stats []struct {
-					Name  string  `json:"name"`
+					Name  text    `json:"name"`
 					Value float64 `json:"value"`
 				} `json:"stats"`
 			} `json:"entries"`
@@ -95,21 +100,31 @@ type standingsJSON struct {
 	} `json:"children"`
 }
 
-// skor bazen "2" bazen 2 olarak geliyor
-type flexString string
+// Kontrol karakterleri atılmış metin. Sayı olarak gelen alanları da
+// (skor bazen "2" bazen 2) metne çeviriyor.
+type text string
 
-func (f *flexString) UnmarshalJSON(b []byte) error {
+func (t *text) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
 	}
-	if len(b) > 0 && b[0] == '"' {
-		var s string
-		if err := json.Unmarshal(b, &s); err != nil {
-			return err
-		}
-		*f = flexString(s)
+	if len(b) == 0 || b[0] != '"' {
+		*t = text(clean(string(b)))
 		return nil
 	}
-	*f = flexString(b)
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	*t = text(clean(s))
 	return nil
+}
+
+func clean(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || (r >= 0x7f && r < 0xa0) {
+			return -1
+		}
+		return r
+	}, s)
 }
