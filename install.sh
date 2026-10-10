@@ -2,7 +2,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.sh | sh
 #
 # TERMINALSCORE_VERSION=0.1.0       specific version (default: latest)
-# TERMINALSCORE_INSTALL_DIR=...     default: ~/.local/bin, /usr/local/bin for root
+# TERMINALSCORE_INSTALL_DIR=...     default: ~/.local/bin, /usr/local/bin for root, $PREFIX/bin on Termux
 
 set -eu
 
@@ -51,7 +51,10 @@ sha256() {
 }
 
 default_dir() {
-	if [ "$(id -u)" = 0 ]; then
+	# Termux: $PREFIX/bin hem PATH'te hem yazılabilir
+	if [ -n "${TERMUX_VERSION:-}" ] || case "${PREFIX:-}" in *com.termux*) true ;; *) false ;; esac; then
+		echo "$PREFIX/bin"
+	elif [ "$(id -u)" = 0 ]; then
 		echo /usr/local/bin
 	else
 		echo "$HOME/.local/bin"

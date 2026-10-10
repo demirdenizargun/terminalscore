@@ -23,7 +23,7 @@ type Client struct {
 }
 
 func New() *Client {
-	return &Client{http: &http.Client{Timeout: 20 * time.Second}}
+	return &Client{http: &http.Client{Timeout: 20 * time.Second, Transport: transport()}}
 }
 
 type State string
