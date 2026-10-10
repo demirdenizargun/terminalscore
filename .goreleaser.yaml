@@ -39,7 +39,7 @@ nfpms:
     formats: [deb, rpm]
 
 changelog:
-  sort: asc
+  abbrev: 7
   filters:
     exclude:
       - "^Merge"
