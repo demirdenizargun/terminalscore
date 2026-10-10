@@ -1,6 +1,7 @@
 #   irm https://raw.githubusercontent.com/demirdenizargun/terminalscore/main/install.ps1 | iex
 #
-# Installs to %LOCALAPPDATA%\Programs\terminalscore and adds it to the user PATH.
+# Installs to %LOCALAPPDATA%\Programs\terminalscore and adds it to PATH
+# (permanently and for the current session).
 
 $ErrorActionPreference = 'Stop'
 $repo = 'demirdenizargun/terminalscore'
@@ -47,10 +48,12 @@ function Install-TerminalScore {
         if (-not $userPath) { $userPath = '' }
         if (-not (($userPath -split ';') -contains $installDir)) {
             [Environment]::SetEnvironmentVariable('Path', (($userPath.TrimEnd(';') + ';' + $installDir).TrimStart(';')), 'User')
-            Write-Host 'Added to PATH. Open a new terminal and run: terminalscore'
-        } else {
-            Write-Host 'Run it with: terminalscore'
         }
+        # irm | iex bu oturumda çalışıyor; açık terminal de hemen bulsun
+        if (-not (($env:Path -split ';') -contains $installDir)) {
+            $env:Path = $env:Path.TrimEnd(';') + ';' + $installDir
+        }
+        Write-Host 'Run it with: terminalscore'
     } finally {
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
     }
