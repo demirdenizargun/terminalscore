@@ -65,19 +65,16 @@ Arayüz dili sistem diline göre Türkçe ya da İngilizce açılıyor. Değişt
 `~/.config/terminalscore/config.json` (Windows'ta `%AppData%\terminalscore\config.json`).
 Dosyayı silersen favori takım tekrar sorulur.
 
-## Derleme
+## Kaynaktan derleme
 
 ```sh
 go build -o terminalscore .
 ```
 
-Sürüm çıkarmak için tag atmak yeterli, gerisini GitHub Actions + GoReleaser hallediyor:
+## Katkı
 
-```sh
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-Yerelde denemek için `goreleaser release --snapshot --clean`.
+Çeviri katkılarına açık: `internal/ui/text.go`'ya yeni bir `texts` değeri, `internal/espn/leagues.go`'ya
+da lig adlarını eklemek yeterli.
 
 ## Lisans
 

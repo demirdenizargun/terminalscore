@@ -65,21 +65,15 @@ use `terminalscore --lang tr` or set `"language": "en"` in the config file:
 `~/.config/terminalscore/config.json` (`%AppData%\terminalscore\config.json` on Windows).
 Deleting that file makes it ask for your favorite team again.
 
-## Building
+## Building from source
 
 ```sh
 go build -o terminalscore .
 ```
 
-Releases are built by GitHub Actions + GoReleaser when a tag is pushed:
+## Contributing
 
-```sh
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-To try it locally: `goreleaser release --snapshot --clean`.
-
-Adding a language means adding one `texts` value in `internal/ui/text.go` and league names
+Translations are welcome: add a `texts` value in `internal/ui/text.go` and league names
 in `internal/espn/leagues.go`.
 
 ## License
